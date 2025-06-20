@@ -38,3 +38,7 @@ Thumbs.db
 # Migrations (optional, uncomment if you don't want to track them initially)
 # */migrations/
 # !*/migrations/__init__.py
+__pycache__/
+venv/
+media/
+*.pyc
