@@ -7,7 +7,8 @@ from rest_framework.generics import ListAPIView
 
 from .models import DocumentContext
 from .serializers import DocumentContextSerializer
-from documents.utils import extract_text_from_file, create_chunks_and_embeddings
+from documents.services.embedding import create_chunks_and_embeddings
+from documents.services.file_processing import extract_text_from_file
 
 from core.mixins import RequireSessionMixin, SessionMissingException
 
@@ -67,3 +68,4 @@ class SessionDocumentListView(RequireSessionMixin, ListAPIView):
         if not session_id:
             return DocumentContext.objects.none()
         return DocumentContext.objects.filter(session_id=session_id).order_by('-uploaded_at')
+
