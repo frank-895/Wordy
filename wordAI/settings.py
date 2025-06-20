@@ -11,6 +11,10 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
 from pathlib import Path
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -25,7 +29,7 @@ SECRET_KEY = 'django-insecure-$ootd627e#3q48l0=tx&%z($qq)mx9@)#%56d5$-8ieulb347k
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['localhost', '127.0.0.1', '0.0.0.0', 'backend']
 
 
 # Application definition
@@ -39,6 +43,8 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     
     # user installed
+    'django_extensions',
+    'corsheaders',
     'prompts',
     'documents',
     'rest_framework',
@@ -46,6 +52,7 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -78,12 +85,27 @@ WSGI_APPLICATION = 'wordAI.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+# Use PostgreSQL if DATABASE_URL is set (Docker environment)
+DATABASE_URL = os.getenv('DATABASE_URL')
+if DATABASE_URL:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': os.getenv('POSTGRES_DB', 'wordai'),
+            'USER': os.getenv('POSTGRES_USER', 'wordai_user'),
+            'PASSWORD': os.getenv('POSTGRES_PASSWORD', 'wordai_password'),
+            'HOST': os.getenv('POSTGRES_HOST', 'db'),
+            'PORT': os.getenv('POSTGRES_PORT', '5432'),
+        }
     }
-}
+else:
+    # Fallback to SQLite for local development
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
+    }
 
 
 # Password validation
@@ -143,12 +165,33 @@ DJANGO_VITE = {
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-import os
-from dotenv import load_dotenv
-
-load_dotenv()
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
 
 
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
+
+# CORS Configuration for Office Add-in
+CORS_ALLOW_ALL_ORIGINS = DEBUG  # Only for development
+CORS_ALLOWED_ORIGINS = [
+    "https://localhost:3000",  # Office Add-in development server
+    "https://localhost:5173",  # Vite development server
+    "https://localhost:8000",  # Backend HTTPS
+    "https://officehome.msocdn.com",  # Office Online
+    "https://office.live.com",  # Office Online
+    "https://outlook.office.com",  # Outlook Online
+    "https://teams.microsoft.com",  # Teams
+]
+
+CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOW_HEADERS = [
+    'accept',
+    'accept-encoding',
+    'authorization',
+    'content-type',
+    'dnt',
+    'origin',
+    'user-agent',
+    'x-csrftoken',
+    'x-requested-with',
+]

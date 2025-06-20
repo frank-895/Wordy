@@ -2,15 +2,25 @@ import { defineConfig, type UserConfig } from 'vite'
 import { resolve } from 'node:path'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
-import mkcert from 'vite-plugin-mkcert'
+import fs from 'node:fs'
 
 // https://vitejs.dev/config/
 export default defineConfig((): UserConfig => {
+  // Use the same SSL certificates as the backend (generated on host)
+  const sslKeyPath = resolve(__dirname, 'ssl/localhost+2-key.pem')
+  const sslCertPath = resolve(__dirname, 'ssl/localhost+2.pem')
+  
+  const httpsConfig = fs.existsSync(sslKeyPath) && fs.existsSync(sslCertPath) 
+    ? {
+        key: fs.readFileSync(sslKeyPath),
+        cert: fs.readFileSync(sslCertPath),
+      }
+    : undefined
+
   return {
     plugins: [
       react(),
       tailwindcss(),
-      mkcert()
     ],
     build: {
       rollupOptions: {
@@ -23,8 +33,9 @@ export default defineConfig((): UserConfig => {
       emptyOutDir: true,
     },
     server: {
-      host: 'localhost',
+      host: '0.0.0.0',
       port: 3000,
+      https: httpsConfig,
       headers: {
         'Access-Control-Allow-Origin': '*',
       },
