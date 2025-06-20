@@ -7,7 +7,7 @@ from rest_framework.generics import ListAPIView
 
 from .models import DocumentContext
 from .serializers import DocumentContextSerializer
-from documents.utils import extract_text_from_file
+from documents.utils import extract_text_from_file, create_chunks_and_embeddings
 
 from core.mixins import RequireSessionMixin, SessionMissingException
 
@@ -44,6 +44,9 @@ class UploadDocumentView(APIView, RequireSessionMixin):
         extracted = extract_text_from_file(doc.original_file)
         doc.extracted_text = extracted
         doc.save()
+        
+        # now create vector chunks
+        create_chunks_and_embeddings(doc)
 
         serializer = DocumentContextSerializer(doc)
         return Response(serializer.data, status=201)
