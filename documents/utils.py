@@ -1,6 +1,7 @@
 import os
 import fitz  # PyMuPDF
 from docx import Document
+import nltk
 
 import textwrap
 from openai import OpenAI
@@ -39,9 +40,23 @@ client = OpenAI(api_key=settings.OPENAI_API_KEY)
 
 def split_text_into_chunks(text, max_chars=1000):
     """
-    Simple word-based chunking. You can improve this later with NLP-aware splitting.
+    Splits text into chunks that respect sentence boundaries using NLTK.
     """
-    return textwrap.wrap(text, width=max_chars, break_long_words=False)
+    sentences = nltk.sent_tokenize(text)
+    chunks = []
+    current_chunk = ""
+
+    for sentence in sentences:
+        if len(current_chunk) + len(sentence) + 1 <= max_chars:
+            current_chunk += " " + sentence
+        else:
+            chunks.append(current_chunk.strip())
+            current_chunk = sentence
+
+    if current_chunk:
+        chunks.append(current_chunk.strip())
+
+    return chunks
 
 def embed_text(text):
     """
