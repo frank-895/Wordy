@@ -26,7 +26,7 @@ interface AppSettings {
 }
 
 export const WordyApp: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'chat' | 'context' | 'settings'>('chat')
+  const [activeTab, setActiveTab] = useState<'chat' | 'context' | 'settings' | 'debug'>('chat')
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: 'initial',
@@ -48,6 +48,8 @@ export const WordyApp: React.FC = () => {
   const [showActionStatus, setShowActionStatus] = useState(false)
   const [actionMessage, setActionMessage] = useState('Content inserted successfully!')
   const [actionType, setActionType] = useState<'success' | 'error'>('success')
+  const [debugLogs, setDebugLogs] = useState<Array<{id: string, timestamp: Date, type: 'info' | 'error' | 'success', message: string}>>([])
+  const [showDebugPanel, setShowDebugPanel] = useState(true)
 
   const messagesContainerRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -70,6 +72,16 @@ export const WordyApp: React.FC = () => {
 
   const generateId = (): string => {
     return Math.random().toString(36).substr(2, 9)
+  }
+
+  const addDebugLog = (type: 'info' | 'error' | 'success', message: string) => {
+    const newLog = {
+      id: generateId(),
+      timestamp: new Date(),
+      type,
+      message
+    }
+    setDebugLogs(prev => [newLog, ...prev].slice(0, 50)) // Keep only last 50 logs
   }
 
   const formatTime = (date: Date): string => {
@@ -124,21 +136,60 @@ export const WordyApp: React.FC = () => {
     return responses[contentType as keyof typeof responses] || responses.general
   }
 
-  const generateMockContent = (context: string): string => {
-    const mockResponses = [
-      "The quarterly results show a 15% increase in revenue with strong performance across all sectors.",
-      "Our strategic initiative has delivered significant value, exceeding initial projections by 23%.",
-      "Market analysis indicates favorable conditions for expansion into emerging segments.",
-      "The project timeline remains on track with all key milestones achieved as scheduled.",
-      "Customer satisfaction scores have improved to 94%, reflecting our commitment to excellence.",
-      "Year-over-year growth demonstrates the effectiveness of our operational improvements.",
-      "Implementation of new processes has resulted in enhanced efficiency and cost reduction.",
-      "Stakeholder feedback confirms alignment with organizational objectives and priorities.",
-      "The comprehensive assessment reveals opportunities for continued optimization and growth.",
-      "Financial metrics indicate robust performance with sustainable long-term prospects."
-    ]
-    
-    return mockResponses[Math.floor(Math.random() * mockResponses.length)]
+  const getApiBaseUrl = (): string => {
+    return 'https://localhost:8000'
+  }
+
+  const generateContentFromAPI = async (commandText: string): Promise<string> => {
+    try {
+      // Get CSRF token from meta tag or cookie
+      const getCsrfToken = () => {
+        const metaTag = document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement
+        if (metaTag) return metaTag.content
+        
+        // Fallback to cookie if meta tag not found
+        const cookies = document.cookie.split(';')
+        for (const cookie of cookies) {
+          const [name, value] = cookie.trim().split('=')
+          if (name === 'csrftoken') return value
+        }
+        return ''
+      }
+
+      const apiUrl = `${getApiBaseUrl()}/api/wordy/`
+      addDebugLog('info', `API Request: ${apiUrl}`)
+      addDebugLog('info', `Window location: ${window.location.href}`)
+      addDebugLog('info', `Command text: "${commandText}"`)
+
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': getCsrfToken(),
+        },
+        body: JSON.stringify({
+          command_text: commandText,
+          content_type: contentType
+        })
+      })
+
+      addDebugLog('info', `Response status: ${response.status}`)
+      addDebugLog('info', `Response headers: ${JSON.stringify(Object.fromEntries(response.headers.entries()))}`)
+
+      const data = await response.json()
+      addDebugLog('info', `Response data: ${JSON.stringify(data)}`)
+      
+      if (data.success) {
+        addDebugLog('success', 'Content generated successfully')
+        return data.content
+      }
+      addDebugLog('error', `API Error: ${data.error}`)
+      return `Error generating content: ${data.error}`
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      addDebugLog('error', `Network Error: ${errorMessage}`)
+      return `Network error: ${errorMessage}. Check debug panel for details.`
+    }
   }
 
   const findWordyCommandEnd = (text: string, wordyIndex: number): number => {
@@ -229,30 +280,47 @@ export const WordyApp: React.FC = () => {
           
           // Check if command ends with a period
           if (commandText.trim().endsWith('.')) {
-            // Replace only the @wordy command text with mock content
-            const mockContent = generateMockContent(commandText)
-            
-            const range = body.getRange()
-            range.load('text')
-            await context.sync()
-            
-            const searchResults = range.search(commandText.trim(), { matchCase: false, matchWholeWord: false })
-            searchResults.load('items')
-            await context.sync()
-            
-            if (searchResults.items.length > 0) {
-              const foundRange = searchResults.items[0]
-              foundRange.insertText(mockContent, Word.InsertLocation.replace)
+            try {
+              // Extract the command text (remove @wordy and the period)
+              const cleanCommandText = commandText.replace('@wordy', '').replace('.', '').trim()
+              addDebugLog('info', `Processing @wordy command: "${cleanCommandText}"`)
               
-              // Reset formatting to normal (remove any blue highlighting and bold)
-              foundRange.font.color = 'black'
-              foundRange.font.bold = false
+              // Generate content using API
+              const generatedContent = await generateContentFromAPI(cleanCommandText)
               
+              const range = body.getRange()
+              range.load('text')
               await context.sync()
               
-              // Show action status
-              setActionMessage('@wordy command executed successfully!')
-              setActionType('success')
+              const searchResults = range.search(commandText.trim(), { matchCase: false, matchWholeWord: false })
+              searchResults.load('items')
+              await context.sync()
+              
+              if (searchResults.items.length > 0) {
+                addDebugLog('info', 'Found @wordy command in document, replacing with generated content')
+                const foundRange = searchResults.items[0]
+                foundRange.insertText(generatedContent, Word.InsertLocation.replace)
+                
+                // Reset formatting to normal (remove any blue highlighting and bold)
+                foundRange.font.color = 'black'
+                foundRange.font.bold = false
+                
+                await context.sync()
+                
+                // Show action status
+                addDebugLog('success', '@wordy command executed successfully!')
+                setActionMessage('@wordy command executed successfully!')
+                setActionType('success')
+                setShowActionStatus(true)
+                setTimeout(() => setShowActionStatus(false), 3000)
+              } else {
+                addDebugLog('error', 'Could not find @wordy command in document to replace')
+              }
+            } catch (error) {
+              const errorMessage = error instanceof Error ? error.message : String(error)
+              addDebugLog('error', `Error processing @wordy command: ${errorMessage}`)
+              setActionMessage('Error processing @wordy command')
+              setActionType('error')
               setShowActionStatus(true)
               setTimeout(() => setShowActionStatus(false), 3000)
             }
@@ -369,7 +437,7 @@ export const WordyApp: React.FC = () => {
       {/* Tab Navigation */}
       <div className="bg-gray-50 border-b border-gray-200 px-5">
         <div className="flex">
-          {(['chat', 'context', 'settings'] as const).map((tab) => (
+          {(['chat', 'context', 'settings', 'debug'] as const).map((tab) => (
             <button
               key={tab}
               type="button"
@@ -381,9 +449,14 @@ export const WordyApp: React.FC = () => {
               }`}
             >
               <span className="text-base">
-                {tab === 'chat' ? '💬' : tab === 'context' ? '📁' : '⚙️'}
+                {tab === 'chat' ? '💬' : tab === 'context' ? '📁' : tab === 'settings' ? '⚙️' : '🐛'}
               </span>
               {tab.charAt(0).toUpperCase() + tab.slice(1)}
+              {tab === 'debug' && debugLogs.filter(log => log.type === 'error').length > 0 && (
+                <span className="ml-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+                  {debugLogs.filter(log => log.type === 'error').length}
+                </span>
+              )}
             </button>
           ))}
         </div>
@@ -692,6 +765,67 @@ export const WordyApp: React.FC = () => {
                 >
                   Check for Updates
                 </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Debug Tab */}
+        {activeTab === 'debug' && (
+          <div className="p-5 h-full overflow-y-auto">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">Debug Panel</h3>
+              <button
+                type="button"
+                onClick={() => setDebugLogs([])}
+                className="px-3 py-1 bg-red-100 text-red-700 rounded text-sm hover:bg-red-200 transition-colors"
+              >
+                Clear Logs
+              </button>
+            </div>
+            
+            <div className="bg-gray-900 text-gray-100 rounded-lg p-4 font-mono text-sm max-h-96 overflow-y-auto">
+              {debugLogs.length === 0 ? (
+                <div className="text-gray-400 text-center py-8">No debug logs yet</div>
+              ) : (
+                <div className="space-y-2">
+                  {debugLogs.map((log) => (
+                    <div key={log.id} className="flex gap-3">
+                      <span className="text-gray-400 text-xs whitespace-nowrap">
+                        {log.timestamp.toLocaleTimeString()}
+                      </span>
+                      <span className={`text-xs font-bold whitespace-nowrap ${
+                        log.type === 'error' ? 'text-red-400' : 
+                        log.type === 'success' ? 'text-green-400' : 
+                        'text-blue-400'
+                      }`}>
+                        {log.type.toUpperCase()}
+                      </span>
+                      <span className="text-gray-100 break-all">
+                        {log.message}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
+              <h4 className="font-semibold text-blue-900 mb-2">Connection Info</h4>
+              <div className="text-sm text-blue-800 space-y-1">
+                <div><strong>Current URL:</strong> {window.location.href}</div>
+                <div><strong>API Base URL:</strong> {getApiBaseUrl()}</div>
+                <div><strong>User Agent:</strong> {navigator.userAgent}</div>
+              </div>
+            </div>
+
+            <div className="mt-4 p-4 bg-yellow-50 rounded-lg border border-yellow-200">
+              <h4 className="font-semibold text-yellow-900 mb-2">Troubleshooting</h4>
+              <div className="text-sm text-yellow-800 space-y-2">
+                <div>• Check if Django server is running on localhost:8000</div>
+                <div>• Verify your OpenAI API key is set in .env file</div>
+                <div>• Look for CORS errors in the logs above</div>
+                <div>• Try typing <code className="bg-yellow-200 px-1">@wordy test.</code> in the document</div>
               </div>
             </div>
           </div>

@@ -51,8 +51,7 @@
     "office-addin-prettier-config": "^2.0.1",
     "tailwindcss": "4.1.10",
     "typescript": "5.8.3",
-    "vite": "6.3.5",
-    "vite-plugin-mkcert": "1.17.8"
+    "vite": "6.3.5"
   },
   "prettier": "office-addin-prettier-config",
   "browserslist": [
