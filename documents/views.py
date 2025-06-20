@@ -6,8 +6,9 @@ from rest_framework.parsers import MultiPartParser
 from .models import DocumentContext
 from .serializers import DocumentContextSerializer
 from rest_framework.generics import ListAPIView
+from core.mixins import RequireSessionMixin
 
-class UploadDocumentView(APIView):
+class UploadDocumentView(RequireSessionMixin, APIView):
     """
     API view to handle uploading documents associated with a session.
     Accepts multipart file uploads and creates a DocumentContext instance.
@@ -36,7 +37,7 @@ class UploadDocumentView(APIView):
         serializer = DocumentContextSerializer(doc)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
-class SessionDocumentListView(ListAPIView):
+class SessionDocumentListView(RequireSessionMixin, ListAPIView):
     """
     API view to list all documents associated with a given session_id.
     Returns an empty queryset if session_id is not provided.

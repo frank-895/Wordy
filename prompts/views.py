@@ -4,10 +4,11 @@ from rest_framework import status
 from django.conf import settings
 from openai import OpenAI  # using the new v1 OpenAI client
 import json  # you forgot to import json
+from core.mixins import RequireSessionMixin
 
 client = OpenAI(api_key=settings.OPENAI_API_KEY)
 
-class StructuredPromptView(APIView):
+class StructuredPromptView(RequireSessionMixin, APIView):
     def post(self, request):
         prompt = request.data.get('prompt')
         if not prompt:
