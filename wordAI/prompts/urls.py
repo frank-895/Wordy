@@ -1,6 +1,6 @@
 from django.urls import path
-from .views import SimplePromptView
+from .views import StructuredPromptView
 
 urlpatterns = [
-    path('generate/', SimplePromptView.as_view(), name='simple-generate'),
+    path('generate/', StructuredPromptView.as_view(), name='simple-generate'),
 ]

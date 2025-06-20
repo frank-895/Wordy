@@ -40,6 +40,7 @@ INSTALLED_APPS = [
     
     # user installed
     'prompts',
+    'documents',
     'rest_framework',
 ]
 
@@ -130,3 +131,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
+
+
+MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / 'media'
