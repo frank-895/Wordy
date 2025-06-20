@@ -87,4 +87,4 @@ def get_relevant_chunks(prompt: str, session_id: str, top_k: int = 3):
 
     # Step 4: Sort and return top_k
     scored_chunks.sort(reverse=True, key=lambda x: x[0])
-    return [chunk for _, chunk in scored_chunks[:top_k]] 
+    return [chunk.content for _, chunk in scored_chunks[:top_k]]
