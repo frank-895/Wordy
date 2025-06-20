@@ -1,25 +1,36 @@
-import { defineConfig } from 'vite'
+import { defineConfig, type UserConfig } from 'vite'
+import { resolve } from 'node:path'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
+import mkcert from 'vite-plugin-mkcert'
 
 // https://vitejs.dev/config/
-export default defineConfig({
-  plugins: [
-    react(),
-    tailwindcss(),
-  ],
-  base: '/static/',
-  build: {
-    outDir: 'dist',
-    rollupOptions: {
-      input: {
-        main: 'src/main.tsx',
+export default defineConfig((): UserConfig => {
+  return {
+    plugins: [
+      react(),
+      tailwindcss(),
+      mkcert()
+    ],
+    build: {
+      rollupOptions: {
+        input: {
+          taskpane: resolve(__dirname, 'taskpane.html'),
+          commands: resolve(__dirname, 'commands.html'),
+        },
+      },
+      outDir: 'dist',
+      emptyOutDir: true,
+    },
+    server: {
+      host: 'localhost',
+      port: 3000,
+      headers: {
+        'Access-Control-Allow-Origin': '*',
       },
     },
-    manifest: true,
-  },
-  server: {
-    host: 'localhost',
-    port: 5173,
-  },
+    define: {
+      'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV || 'development'),
+    },
+  }
 }) 
