@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pyc
+*.pdb
+*.egg-info/
+*.egg
+*.env
+*.venv
+*.log
+
+# Virtual environment
+env/
+venv/
+
+# Django specific
+*.sqlite3
+db.sqlite3
+/media/
+/staticfiles/
+
+# IDE/editor
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# OS generated
+.DS_Store
+Thumbs.db
+
+# Environment/config
+.env
+.env.*
+
+# Migrations (optional, uncomment if you don't want to track them initially)
+# */migrations/
+# !*/migrations/__init__.py
