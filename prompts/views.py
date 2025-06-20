@@ -1,13 +1,9 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from django.conf import settings
-from openai import OpenAI  # using the new v1 OpenAI client
-import json  # you forgot to import json
 from core.mixins import RequireSessionMixin
-from .utils import llm_chat_json
-
-client = OpenAI(api_key=settings.OPENAI_API_KEY)
+from documents.services.embedding import get_relevant_chunks
+from .utils.client import format_context_prompt, llm_chat_json
 
 class StructuredPromptView(RequireSessionMixin, APIView):
     def post(self, request):
@@ -15,18 +11,14 @@ class StructuredPromptView(RequireSessionMixin, APIView):
         if not prompt:
             return Response({'error': 'Prompt is required.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        system_instruction = (
-            "You are a Word document assistant. "
-            "Only return JSON with an 'action' key and optional 'style' or 'content' keys. "
-            "DO NOT explain or include extra text. Only return the JSON.\n\n"
-            "Supported actions:\n"
-            "- format: apply styling (e.g., color, bold)\n"
-            "- replace: replace text\n"
-            "Example:\n"
-            "{ \"action\": \"format\", \"style\": { \"color\": \"green\" } }"
-        )
+        try:
+            session_id = self.get_session_id(request)
+            context_chunks = get_relevant_chunks(prompt, session_id)
+            system_msg, user_msg = format_context_prompt(prompt, context_chunks)
+            result = llm_chat_json(user_msg, system_msg)
+        except Exception as e:
+            return Response({'error': str(e)}, status=500)
 
-        result = llm_chat_json(prompt, system_instruction)
         if result["success"]:
             return Response(result["data"])
         elif "raw" in result:
