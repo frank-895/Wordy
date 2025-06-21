@@ -1,7 +1,7 @@
 def parse_lexical_json(lexical_json):
     """
     Parses Lexical JSON and returns a list of structured blocks.
-    Each block is a tuple (type, content[, metadata]).
+    Each block is a tuple: (type, content[, metadata])
     """
     blocks = []
 
@@ -32,7 +32,7 @@ def parse_lexical_json(lexical_json):
                 blocks.append(('code', text, language))
 
             elif node_type == 'list':
-                list_type = node.get('listType', 'bullet')  # 'bullet' or 'number'
+                list_type = node.get('listType', 'bullet')
                 items = []
                 for li in children:
                     if li.get('type') == 'listitem':
@@ -40,7 +40,7 @@ def parse_lexical_json(lexical_json):
                 blocks.append(('list', items, list_type))
 
             else:
-                # Recursively walk children of unknown container types
+                # Walk unknown nodes recursively
                 walk_nodes(children)
 
     walk_nodes(lexical_json.get('root', {}).get('children', []))
