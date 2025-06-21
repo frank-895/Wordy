@@ -1,4 +1,5 @@
 import json
+import logging
 from django.http import JsonResponse, HttpResponse, HttpResponseNotAllowed
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
@@ -9,8 +10,12 @@ from .services.document_pipeline import process_lexical_document
 from .services.lexical_processor import parse_lexical_json
 from .services.placeholder_resolver import resolve_placeholders, extract_template_fields
 
-# Import RAG pipeline models
+# Import RAG pipeline models and services
 from rag_pipeline.models import Document, DocumentChunk
+from rag_pipeline.services.rag_pipeline import RAGPipeline
+
+# Set up logging
+logger = logging.getLogger(__name__)
 
 @csrf_exempt
 def create_template(request):
@@ -203,6 +208,10 @@ def generate_document(request):
         if not template_id:
             return JsonResponse({'error': 'template_id is required'}, status=400)
         
+        logger.info(f"🔍 RAG DEBUG: Starting document generation for template {template_id}")
+        logger.info(f"🔍 RAG DEBUG: Context map: {context_map}")
+        logger.info(f"🔍 RAG DEBUG: Prompt map: {prompt_map}")
+        
         # Fetch the template from the database
         try:
             template = Template.objects.get(id=template_id)
@@ -221,23 +230,65 @@ def generate_document(request):
             lexical_json = template_data
             variables = []
         
+        logger.info(f"🔍 RAG DEBUG: Template has {len(variables)} variables")
+        
         # Get context documents associated with this template
         context_info = []
         try:
             documents = Document.objects.filter(template=template)
-            for document in documents:
-                chunks = DocumentChunk.objects.filter(document=document)
-                for chunk in chunks:
-                    context_info.append({
-                        'content': chunk.content,
-                        'metadata': {
-                            'source': document.name,
-                            'chunk_id': str(chunk.id),
-                            'document_id': str(document.id),
-                            'document_name': document.name
-                        }
-                    })
+            logger.info(f"🔍 RAG DEBUG: Found {documents.count()} context documents for template")
+            
+            if documents.exists():
+                # Initialize RAG pipeline for semantic search
+                rag_pipeline = RAGPipeline()
+                
+                # Extract all prompts and placeholders to use as search queries
+                search_queries = []
+                
+                # Add variable prompts as search queries
+                for variable in variables:
+                    if variable.get('type') == 'prompt':
+                        prompt = variable.get('prompt', '')
+                        if prompt:
+                            search_queries.append(prompt)
+                            logger.info(f"🔍 RAG DEBUG: Added variable prompt as search query: {prompt[:50]}...")
+                
+                # Add prompt_map values as search queries
+                for prompt_key, prompt_value in prompt_map.items():
+                    if prompt_value:
+                        search_queries.append(prompt_value)
+                        logger.info(f"🔍 RAG DEBUG: Added prompt_map value as search query: {prompt_value[:50]}...")
+                
+                # If no specific queries, use a general search
+                if not search_queries:
+                    search_queries = ["general information", "context", "background"]
+                    logger.info("🔍 RAG DEBUG: No specific queries found, using general search terms")
+                
+                # Get relevant chunks for each search query
+                all_relevant_chunks = []
+                for query in search_queries:
+                    logger.info(f"🔍 RAG DEBUG: Searching for chunks relevant to: {query[:50]}...")
+                    relevant_chunks = rag_pipeline.get_similar_chunks_internal(query, top_k=3)
+                    logger.info(f"🔍 RAG DEBUG: Found {len(relevant_chunks)} relevant chunks for query")
+                    
+                    for chunk in relevant_chunks:
+                        # Check if this chunk is already in our list (avoid duplicates)
+                        chunk_id = chunk['chunk_id']
+                        if not any(c.get('chunk_id') == chunk_id for c in all_relevant_chunks):
+                            all_relevant_chunks.append(chunk)
+                            logger.info(f"🔍 RAG DEBUG: Added chunk {chunk_id} from {chunk['document_name']} (similarity: {chunk['similarity_score']:.3f})")
+                
+                # Sort by similarity score and take top results
+                all_relevant_chunks.sort(key=lambda x: x['similarity_score'], reverse=True)
+                context_info = all_relevant_chunks[:10]  # Limit to top 10 most relevant chunks
+                
+                logger.info(f"🔍 RAG DEBUG: Final context info contains {len(context_info)} unique chunks")
+                
+            else:
+                logger.info("🔍 RAG DEBUG: No context documents found for template")
+                
         except Exception as e:
+            logger.error(f"🔍 RAG DEBUG: Error getting context: {str(e)}")
             # If there's an error getting context, continue without it
             context_info = []
         
@@ -249,6 +300,8 @@ def generate_document(request):
             context_info,
             variables
         )
+        
+        logger.info(f"🔍 RAG DEBUG: Document generation completed successfully")
         
         # Create response with PDF content
         response = HttpResponse(
@@ -262,6 +315,7 @@ def generate_document(request):
     except json.JSONDecodeError:
         return JsonResponse({'error': 'Invalid JSON'}, status=400)
     except Exception as e:
+        logger.error(f"🔍 RAG DEBUG: Error in document generation: {str(e)}")
         return JsonResponse({'error': str(e)}, status=500)
 
 

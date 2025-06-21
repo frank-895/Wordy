@@ -41,14 +41,17 @@ class EmbeddingService:
             List of floats representing the embedding vector
         """
         try:
+            logger.info(f"🔍 RAG DEBUG: Generating embedding for text: '{text[:100]}...'")
             response = self.client.embeddings.create(
                 model=self.model,
                 input=text
             )
-            return response.data[0].embedding
+            embedding = response.data[0].embedding
+            logger.info(f"🔍 RAG DEBUG: Generated embedding with {len(embedding)} dimensions")
+            return embedding
             
         except Exception as e:
-            logger.error(f"Error generating embedding: {str(e)}")
+            logger.error(f"🔍 RAG DEBUG: Error generating embedding: {str(e)}")
             raise ValueError(f"Failed to generate embedding: {str(e)}")
     
     def generate_embeddings_batch(self, texts: List[str]) -> List[List[float]]:
@@ -62,14 +65,17 @@ class EmbeddingService:
             List of embedding vectors
         """
         try:
+            logger.info(f"🔍 RAG DEBUG: Generating batch embeddings for {len(texts)} texts")
             response = self.client.embeddings.create(
                 model=self.model,
                 input=texts
             )
-            return [data.embedding for data in response.data]
+            embeddings = [data.embedding for data in response.data]
+            logger.info(f"🔍 RAG DEBUG: Generated {len(embeddings)} embeddings with {len(embeddings[0]) if embeddings else 0} dimensions each")
+            return embeddings
             
         except Exception as e:
-            logger.error(f"Error generating batch embeddings: {str(e)}")
+            logger.error(f"🔍 RAG DEBUG: Error generating batch embeddings: {str(e)}")
             raise ValueError(f"Failed to generate batch embeddings: {str(e)}")
     
     def embed_chunks(self, chunks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:

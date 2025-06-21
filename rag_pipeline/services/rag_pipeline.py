@@ -251,13 +251,18 @@ class RAGPipeline:
             List of similar chunks with metadata
         """
         try:
+            logger.info(f"🔍 RAG DEBUG: Starting similarity search for query: '{query[:100]}...'")
+            
             # Generate embedding for query
             query_embedding = self.embedding_service.generate_embedding(query)
+            logger.info(f"🔍 RAG DEBUG: Generated query embedding with {len(query_embedding)} dimensions")
             
             # Get all chunks from database
             all_chunks = DocumentChunk.objects.all()
+            logger.info(f"🔍 RAG DEBUG: Found {all_chunks.count()} total chunks in database")
             
             if not all_chunks:
+                logger.info("🔍 RAG DEBUG: No chunks found in database")
                 return []
             
             # Calculate similarities
@@ -268,10 +273,20 @@ class RAGPipeline:
                         query_embedding, chunk.embedding
                     )
                     similarities.append((chunk, similarity))
+                    logger.debug(f"🔍 RAG DEBUG: Chunk {chunk.id} from '{chunk.document.name}' similarity: {similarity:.3f}")
+                else:
+                    logger.warning(f"🔍 RAG DEBUG: Chunk {chunk.id} has no embedding")
+            
+            logger.info(f"🔍 RAG DEBUG: Calculated similarities for {len(similarities)} chunks")
             
             # Sort by similarity and get top results
             similarities.sort(key=lambda x: x[1], reverse=True)
             top_results = similarities[:top_k]
+            
+            logger.info(f"🔍 RAG DEBUG: Top {len(top_results)} results:")
+            for i, (chunk, similarity) in enumerate(top_results, 1):
+                logger.info(f"🔍 RAG DEBUG: #{i}: Chunk {chunk.id} from '{chunk.document.name}' (similarity: {similarity:.3f})")
+                logger.info(f"🔍 RAG DEBUG: #{i} content preview: {chunk.content[:100]}...")
             
             # Format results
             results = []
@@ -287,9 +302,9 @@ class RAGPipeline:
                 }
                 results.append(result)
             
-            logger.info(f"Found {len(results)} similar chunks for internal query")
+            logger.info(f"🔍 RAG DEBUG: Returning {len(results)} similar chunks for internal query")
             return results
             
         except Exception as e:
-            logger.error(f"Error getting similar chunks internally: {str(e)}")
+            logger.error(f"🔍 RAG DEBUG: Error getting similar chunks internally: {str(e)}")
             return [] 

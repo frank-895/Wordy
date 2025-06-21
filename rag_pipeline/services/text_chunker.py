@@ -42,8 +42,15 @@ class TextChunker:
             List of chunk dictionaries with content and metadata
         """
         try:
+            logger.info(f"🔍 RAG DEBUG: Starting text chunking for text of length {len(text)}")
+            logger.info(f"🔍 RAG DEBUG: Chunk size: {self.chunk_size}, Chunk overlap: {self.chunk_overlap}")
+            
             # Split the text into chunks
             chunks = self.text_splitter.split_text(text)
+            
+            logger.info(f"🔍 RAG DEBUG: Text splitter created {len(chunks)} chunks")
+            for i, chunk in enumerate(chunks):
+                logger.info(f"🔍 RAG DEBUG: Chunk {i+1} length: {len(chunk)} chars, preview: {chunk[:100]}...")
             
             # Create chunk objects with metadata
             chunk_objects = []
@@ -55,11 +62,11 @@ class TextChunker:
                 }
                 chunk_objects.append(chunk_obj)
             
-            logger.info(f"Created {len(chunk_objects)} chunks from text")
+            logger.info(f"🔍 RAG DEBUG: Created {len(chunk_objects)} chunk objects from text")
             return chunk_objects
             
         except Exception as e:
-            logger.error(f"Error chunking text: {str(e)}")
+            logger.error(f"🔍 RAG DEBUG: Error chunking text: {str(e)}")
             raise ValueError(f"Failed to chunk text: {str(e)}")
     
     def chunk_document(self, document_content: str, document_name: str, 
