@@ -6,12 +6,12 @@ from .views import (
 
 urlpatterns = [
     # Template CRUD endpoints
-    path('template/add/', create_template, name='create_template'),
-    path('template/', list_templates, name='list_templates'),
-    path('template/<uuid:template_id>/', get_template, name='get_template'),
-    path('template/<uuid:template_id>/edit/', update_template, name='update_template'),
-    path('template/<uuid:template_id>/delete/', delete_template, name='delete_template'),
-    path('template/<uuid:template_id>/fields/', template_fields, name='template_fields'),
+    path('add/', create_template, name='create_template'),
+    path('', list_templates, name='list_templates'),
+    path('<uuid:template_id>/', get_template, name='get_template'),
+    path('<uuid:template_id>/edit/', update_template, name='update_template'),
+    path('<uuid:template_id>/delete/', delete_template, name='delete_template'),
+    path('<uuid:template_id>/fields/', template_fields, name='template_fields'),
     
     # Document generation endpoint
     path('generate_doc/', generate_document, name='generate_document'),
