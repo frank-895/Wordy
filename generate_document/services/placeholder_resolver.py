@@ -8,7 +8,7 @@ def resolve_placeholders(text, context, start="{{", end="}}"):
     pattern = re.escape(start) + r"(.*?)" + re.escape(end)
     return re.sub(pattern, lambda m: context.get(m.group(1).strip(), m.group(0)), text)
 
-def resolve_llm_prompts(text, context, prompts, start="[[", end="]]", placeholder_delims=("{{", "}}")):
+def resolve_llm_blocks(text, context, prompts, start="[[", end="]]", placeholder_delims=("{{", "}}")):
     """
     Replace [[prompt_key]] with LLM-generated text.
     Each key maps to a prompt template containing {{context}} placeholders.
