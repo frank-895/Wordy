@@ -45,6 +45,8 @@ INSTALLED_APPS = [
     # user installed
     'rest_framework',
     'django_vite',
+    'corsheaders',
+    'generate_document',
 ]
 
 MIDDLEWARE = [
@@ -95,7 +97,7 @@ if DATABASE_URL:
         }
     }
 else:
-    # Fallback to SQLite for local development
+# # Fallback to SQLite for local development
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
