@@ -4,13 +4,13 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 from django.shortcuts import get_object_or_404
 from django.core.exceptions import ObjectDoesNotExist
-from .models import Template, Document, DocumentChunk
+from .models import Template
 from .services.document_pipeline import process_lexical_document
 from .services.lexical_processor import parse_lexical_json
 from .services.placeholder_resolver import resolve_placeholders, extract_template_fields
 
-# Import RAG pipeline for context retrieval
-from rag_pipeline.services.rag_pipeline import RAGPipeline
+# Import RAG pipeline models
+from rag_pipeline.models import Document, DocumentChunk
 
 @csrf_exempt
 def create_template(request):
@@ -33,29 +33,25 @@ def create_template(request):
     return JsonResponse({'id': template.id, 'name': template.name}, status=201)
 
 
+@csrf_exempt
 def list_templates(request):
     """
-    GET: List all templates.
+    GET: List all templates
     """
     if request.method != 'GET':
         return HttpResponseNotAllowed(['GET'])
 
-    templates = Template.objects.all()
-    template_list = []
-    
-    for template in templates:
-        template_list.append({
-            'id': template.id,
-            'name': template.name,
-            'created_at': template.created_at.isoformat()
-        })
-    
-    return JsonResponse({'templates': template_list})
+    try:
+        templates = Template.objects.all().values('id', 'name', 'created_at')
+        return JsonResponse({'templates': list(templates)})
+    except Exception as e:
+        return JsonResponse({'error': f"Failed to list templates: {str(e)}"}, status=500)
 
 
+@csrf_exempt
 def get_template(request, template_id):
     """
-    GET: Get a specific template by ID.
+    GET: Get a specific template by ID
     """
     if request.method != 'GET':
         return HttpResponseNotAllowed(['GET'])
@@ -68,107 +64,86 @@ def get_template(request, template_id):
             'lexical_json': template.lexical_json,
             'created_at': template.created_at.isoformat()
         })
-    except ObjectDoesNotExist:
-        return JsonResponse({'error': 'Template not found.'}, status=404)
+    except Template.DoesNotExist:
+        return JsonResponse({'error': 'Template not found'}, status=404)
+    except Exception as e:
+        return JsonResponse({'error': f"Failed to get template: {str(e)}"}, status=500)
 
 
 @csrf_exempt
 def update_template(request, template_id):
     """
-    PUT: Update an existing template.
-    Body: { "name": "Updated Template", "lexical_json": {...} }
+    PUT: Update an existing template
+    Body: { "name": "Updated Name", "lexical_json": {...} }
     """
     if request.method != 'PUT':
         return HttpResponseNotAllowed(['PUT'])
 
     try:
-        template = Template.objects.get(id=template_id)
-    except ObjectDoesNotExist:
-        return JsonResponse({'error': 'Template not found.'}, status=404)
-
-    try:
         data = json.loads(request.body)
         name = data.get('name')
         lexical_json = data.get('lexical_json')
+        
+        template = Template.objects.get(id=template_id)
+        
+        if name is not None:
+            template.name = name
+        if lexical_json is not None:
+            template.lexical_json = lexical_json
+            
+        template.save()
+        
+        return JsonResponse({
+            'id': template.id,
+            'name': template.name,
+            'message': 'Template updated successfully'
+        })
+        
+    except Template.DoesNotExist:
+        return JsonResponse({'error': 'Template not found'}, status=404)
     except json.JSONDecodeError:
-        return JsonResponse({'error': 'Invalid JSON input.'}, status=400)
-
-    if name is not None:
-        template.name = name
-    if lexical_json is not None:
-        template.lexical_json = lexical_json
-
-    template.save()
-    return JsonResponse({'id': template.id, 'name': template.name})
+        return JsonResponse({'error': 'Invalid JSON'}, status=400)
+    except Exception as e:
+        return JsonResponse({'error': f"Failed to update template: {str(e)}"}, status=500)
 
 
 @csrf_exempt
 def delete_template(request, template_id):
     """
-    DELETE: Delete a template.
+    DELETE: Delete a template
     """
     if request.method != 'DELETE':
         return HttpResponseNotAllowed(['DELETE'])
 
     try:
         template = Template.objects.get(id=template_id)
-    except ObjectDoesNotExist:
-        return JsonResponse({'error': 'Template not found.'}, status=404)
+        template_name = template.name
+        template.delete()
+        
+        return JsonResponse({'message': f'Template "{template_name}" deleted successfully'})
+        
+    except Template.DoesNotExist:
+        return JsonResponse({'error': 'Template not found'}, status=404)
+    except Exception as e:
+        return JsonResponse({'error': f"Failed to delete template: {str(e)}"}, status=500)
 
-    template.delete()
-    return JsonResponse({'message': 'Template deleted successfully.'}, status=204)
 
-
+@csrf_exempt
 def template_fields(request, template_id):
     """
-    GET: Return all placeholders and prompt keys in a given template.
+    GET: Extract fields (placeholders and prompts) from a template
     """
     if request.method != 'GET':
         return HttpResponseNotAllowed(['GET'])
 
     try:
         template = Template.objects.get(id=template_id)
-    except ObjectDoesNotExist:
-        return JsonResponse({'error': 'Template not found.'}, status=404)
-
-    blocks = parse_lexical_json(template.lexical_json)
-    placeholder_pattern = r"\{\{(.*?)\}\}"
-    prompt_pattern = r"\[\[(.*?)\]\]"
-
-    import re
-    placeholders = set()
-    prompts = set()
-
-    def extract_placeholders_from_text(text):
-        """Extract placeholders and prompts from text."""
-        placeholders.update(re.findall(placeholder_pattern, text))
-        prompts.update(re.findall(prompt_pattern, text))
-
-    for block in blocks:
-        block_type = block[0]
-        content = block[1]
-
-        if isinstance(content, str):
-            # Handle plain text content
-            extract_placeholders_from_text(content)
-        elif isinstance(content, list):
-            # Handle formatted text segments
-            for segment in content:
-                if isinstance(segment, dict) and 'text' in segment:
-                    # Extract from formatted text segment
-                    extract_placeholders_from_text(segment['text'])
-                elif isinstance(segment, str):
-                    # Extract from plain text segment
-                    extract_placeholders_from_text(segment)
-        elif isinstance(content, list) and all(isinstance(item, str) for item in content):
-            # Handle list items (plain text)
-            for item in content:
-                extract_placeholders_from_text(item)
-
-    return JsonResponse({
-        'placeholders': sorted(placeholders),
-        'prompts': sorted(prompts),
-    })
+        fields = extract_template_fields(template.lexical_json)
+        return JsonResponse(fields)
+    except Template.DoesNotExist:
+        return JsonResponse({'error': 'Template not found'}, status=404)
+    except Exception as e:
+        return JsonResponse({'error': f"Failed to extract template fields: {str(e)}"}, status=500)
 
 
 @csrf_exempt
@@ -193,21 +168,24 @@ def generate_document(request):
             return JsonResponse({'error': 'Template not found'}, status=404)
         lexical_json = template.lexical_json
         
-        # Get context info if template_id is provided
-        context_info = None
+        # Get context documents associated with this template
+        context_info = []
         try:
-            chunks = DocumentChunk.objects.filter(document__id=template_id)
-            context_info = [
-                {
-                    'content': chunk.content,
-                    'metadata': {
-                        'source': chunk.document.name,
-                        'chunk_id': chunk.id
-                    }
-                }
-                for chunk in chunks
-            ]
-        except DocumentChunk.DoesNotExist:
+            documents = Document.objects.filter(template=template)
+            for document in documents:
+                chunks = DocumentChunk.objects.filter(document=document)
+                for chunk in chunks:
+                    context_info.append({
+                        'content': chunk.content,
+                        'metadata': {
+                            'source': document.name,
+                            'chunk_id': str(chunk.id),
+                            'document_id': str(document.id),
+                            'document_name': document.name
+                        }
+                    })
+        except Exception as e:
+            # If there's an error getting context, continue without it
             context_info = []
         
         # Process the document
@@ -232,26 +210,27 @@ def generate_document(request):
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
 
+
 @csrf_exempt
-@require_http_methods(["POST"])
 def extract_template_fields_view(request):
     """
-    Extract template fields from Lexical JSON content.
+    POST: Extract fields from Lexical JSON content
+    Body: { "lexical_json": {...} }
     """
+    if request.method != 'POST':
+        return HttpResponseNotAllowed(['POST'])
+
     try:
         data = json.loads(request.body)
         lexical_json = data.get('lexical_json')
         
         if not lexical_json:
             return JsonResponse({'error': 'lexical_json is required'}, status=400)
-        
+            
         fields = extract_template_fields(lexical_json)
-        
-        return JsonResponse({
-            'template_fields': fields
-        })
+        return JsonResponse(fields)
         
     except json.JSONDecodeError:
         return JsonResponse({'error': 'Invalid JSON'}, status=400)
     except Exception as e:
-        return JsonResponse({'error': str(e)}, status=500)
+        return JsonResponse({'error': f"Failed to extract fields: {str(e)}"}, status=500)

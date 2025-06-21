@@ -28,7 +28,12 @@ def call_llm(prompt, context_info=None):
     if context_info and len(context_info) > 0:
         full_prompt += "\n\n--- CONTEXT (Reference if needed) ---\n"
         for i, chunk in enumerate(context_info, 1):
-            full_prompt += f"\nContext {i} (from {chunk['document_name']}, relevance: {chunk['similarity_score']:.3f}):\n{chunk['content']}\n"
+            # Handle different metadata structures
+            document_name = chunk.get('document_name') or chunk.get('metadata', {}).get('document_name') or chunk.get('metadata', {}).get('source', 'Unknown Document')
+            similarity_score = chunk.get('similarity_score', 1.0)  # Default to 1.0 if not provided
+            content = chunk.get('content', '')
+            
+            full_prompt += f"\nContext {i} (from {document_name}, relevance: {similarity_score:.3f}):\n{content}\n"
         full_prompt += "\n--- END CONTEXT ---\n\n"
         full_prompt += "Please use the primary prompt information first, and reference the context above if it's relevant to your response."
     
@@ -36,4 +41,5 @@ def call_llm(prompt, context_info=None):
         model="gpt-3.5-turbo",
         messages=[{"role": "user", "content": full_prompt}],
     )
-    return response.choices[0].message.content.strip()
+    content = response.choices[0].message.content
+    return content.strip() if content else ""

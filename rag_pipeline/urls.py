@@ -1,5 +1,5 @@
 from django.urls import path
-from .views import upload_context, list_context, delete_context
+from .views import upload_context, list_context, delete_context, cleanup_session
 
 app_name = 'rag_pipeline'
 
@@ -8,4 +8,5 @@ urlpatterns = [
     path('upload/', upload_context, name='upload_context'),
     path('list/', list_context, name='list_context'),
     path('delete/<uuid:document_id>/', delete_context, name='delete_context'),
+    path('cleanup/<str:session_id>/', cleanup_session, name='cleanup_session'),
 ] 

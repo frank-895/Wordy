@@ -36,23 +36,48 @@ class RAGPipeline:
         self.text_chunker = TextChunker(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
         self.embedding_service = EmbeddingService(model=embedding_model)
     
-    def process_text_document(self, name: str, content: str) -> Document:
+    def _validate_uuid(self, uuid_string: str) -> Optional[uuid.UUID]:
+        """
+        Validate and convert string to UUID
+        
+        Args:
+            uuid_string: String representation of UUID
+            
+        Returns:
+            UUID object if valid, None if invalid
+        """
+        if not uuid_string:
+            return None
+        try:
+            return uuid.UUID(uuid_string)
+        except ValueError:
+            logger.error(f"Invalid UUID format: {uuid_string}")
+            return None
+    
+    def process_text_document(self, name: str, content: str, template_id: str = None, session_id: str = None) -> Document:
         """
         Process a text document and store it in the database
         
         Args:
             name: Name of the document
-            content: Text content of the document
+            content: Text content
+            template_id: Optional template ID to associate with
+            session_id: Optional session ID for cleanup
             
         Returns:
             Created Document object
         """
         try:
+            # Validate template_id if provided
+            validated_template_id = self._validate_uuid(template_id) if template_id else None
+            
             # Create document record
             document = Document.objects.create(
                 name=name,
                 content=content,
-                file_type='text'
+                file_type='text',
+                template_id=validated_template_id,
+                session_id=session_id
             )
             
             # Process the document
@@ -65,18 +90,23 @@ class RAGPipeline:
             logger.error(f"Error processing text document {name}: {str(e)}")
             raise
     
-    def process_file_document(self, name: str, file_obj) -> Document:
+    def process_file_document(self, name: str, file_obj, template_id: str = None, session_id: str = None) -> Document:
         """
         Process a file document (PDF, DOCX) and store it in the database
         
         Args:
             name: Name of the document
             file_obj: Uploaded file object
+            template_id: Optional template ID to associate with
+            session_id: Optional session ID for cleanup
             
         Returns:
             Created Document object
         """
         try:
+            # Validate template_id if provided
+            validated_template_id = self._validate_uuid(template_id) if template_id else None
+            
             # Determine file type
             file_type = self.document_processor.validate_file_type(file_obj.name)
             
@@ -88,7 +118,9 @@ class RAGPipeline:
             document = Document.objects.create(
                 name=name,
                 file_path=saved_path,
-                file_type=file_type
+                file_type=file_type,
+                template_id=validated_template_id,
+                session_id=session_id
             )
             
             # Process the document

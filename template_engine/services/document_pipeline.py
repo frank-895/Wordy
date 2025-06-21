@@ -15,6 +15,9 @@ def process_lexical_document(lexical_json, context_map, prompt_map, context_info
         prompt_map: Dictionary of prompt templates
         context_info: Optional list of relevant document chunks for context
     """
+    if context_info is None:
+        context_info = []
+
     blocks = parse_lexical_json(lexical_json)
     processed_blocks = []
 

@@ -15,6 +15,8 @@ class Document(models.Model):
         ('pdf', 'PDF'),
         ('docx', 'DOCX'),
     ])
+    template = models.ForeignKey('template_engine.Template', on_delete=models.CASCADE, null=True, blank=True, related_name='documents')
+    session_id = models.CharField(max_length=64, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     

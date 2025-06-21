@@ -1,5 +1,6 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useEffect, useState, useCallback } from 'react'
+import { ContextManager } from '../../components/ContextManager'
 
 export const Route = createFileRoute('/templates/$templateId')({
   component: TemplateForm,
@@ -18,10 +19,17 @@ function TemplateForm() {
   const [error, setError] = useState<string>('')
   const [generating, setGenerating] = useState<boolean>(false)
   const [generateMessage, setGenerateMessage] = useState<string>('')
+  const [sessionId, setSessionId] = useState<string>('')
   
   // Form state for user inputs
   const [contextMap, setContextMap] = useState<Record<string, string>>({})
   const [promptMap, setPromptMap] = useState<Record<string, string>>({})
+
+  // Generate a session ID when component mounts
+  useEffect(() => {
+    const newSessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+    setSessionId(newSessionId)
+  }, [])
 
   const fetchFormFields = useCallback(async () => {
     try {
@@ -267,12 +275,23 @@ function TemplateForm() {
             </div>
           )}
 
+          {/* Context Management Section */}
+          <div className="bg-white rounded-lg shadow-md p-6">
+            <h2 className="text-xl font-bold text-gray-900 mb-4">
+              Context Documents
+            </h2>
+            <p className="text-gray-600 mb-4">
+              Associate collateral material with this template to provide context for AI-generated content
+            </p>
+            <ContextManager templateId={templateId} sessionId={sessionId} />
+          </div>
+
           {/* Generate Section */}
           <div className="bg-white rounded-lg shadow-md p-6">
             <h2 className="text-xl font-bold text-gray-900 mb-4">Generate Document</h2>
             <div className="flex justify-between items-center">
               <p className="text-gray-600">
-                Click the button below to generate your document with the filled variables
+                Click the button below to generate your document with the filled variables and associated context
               </p>
               <button
                 type="button"
