@@ -7,7 +7,6 @@ export const Route = createFileRoute('/editor/$templateId')({
 
 function TemplateEditor() {
   const { templateId } = Route.useParams()
-  console.log('TemplateEditor rendered with templateId:', templateId)
   
   return (
     <div className="py-4">

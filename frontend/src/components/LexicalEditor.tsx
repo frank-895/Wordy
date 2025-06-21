@@ -817,7 +817,8 @@ function TemplateLoaderPlugin({ templateData }: { templateData: any }) {
           let node;
           
           if (child.type === 'heading') {
-            node = $createHeadingNode(child.level as HeadingTagType || 'h1');
+            const headingTag = `h${child.level || 1}` as HeadingTagType;
+            node = $createHeadingNode(headingTag);
           } else if (child.type === 'quote') {
             node = $createQuoteNode();
           } else {
@@ -836,6 +837,10 @@ function TemplateLoaderPlugin({ templateData }: { templateData: any }) {
                   if (textChild.format & 2) textNode.toggleFormat('italic');
                   if (textChild.format & 4) textNode.toggleFormat('strikethrough');
                   if (textChild.format & 8) textNode.toggleFormat('underline');
+                }
+                // Apply inline styles if present
+                if (textChild.style) {
+                  textNode.setStyle(textChild.style);
                 }
                 node.append(textNode);
               }
