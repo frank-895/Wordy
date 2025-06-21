@@ -28,6 +28,7 @@ import type {
   LexicalNode,
   EditorConfig,
   SerializedTextNode,
+  RangeSelection,
 } from 'lexical';
 import { 
   AlignLeft, 
@@ -148,13 +149,15 @@ export class VariableNode extends TextNode {
     
     element.style.padding = '1px 3px';
     element.style.borderRadius = '3px';
-    element.style.cursor = 'text';
+    element.style.cursor = 'default';
     element.style.textDecoration = 'none';
     element.style.display = 'inline';
+    element.style.userSelect = 'none';
     element.setAttribute('data-variable-id', this.__variableId);
     element.setAttribute('data-variable-type', this.__variableType);
-    element.title = `${this.__variableType === 'prompt' ? 'AI Prompt' : 'Variable'}: ${this.__variableId}`;
-    element.setAttribute('contenteditable', 'true');
+    element.title = `${this.__variableType === 'prompt' ? 'AI Prompt' : 'Variable'}: ${this.__variableId} (Double-click to edit)`;
+    // Remove contenteditable to prevent cursor trapping
+    element.setAttribute('contenteditable', 'false');
     return element;
   }
 
@@ -188,7 +191,7 @@ export class VariableNode extends TextNode {
     };
   }
 
-  // Allow this node to be selected and edited like regular text
+  // Allow this node to be selected but not directly edited
   isSelectable(): boolean {
     return true;
   }
@@ -201,8 +204,23 @@ export class VariableNode extends TextNode {
     return false;
   }
 
-  // Make sure it behaves like regular text for formatting
+  // Keep it as a text entity for proper cursor flow
   isTextEntity(): boolean {
+    return true;
+  }
+
+  // Allow the cursor to move around this node
+  isInline(): true {
+    return true;
+  }
+
+  // Handle backspace/delete when this node is selected
+  isToken(): boolean {
+    return true;
+  }
+
+  // Make the text non-editable but allow cursor movement
+  isImmutable(): boolean {
     return true;
   }
 }
@@ -660,13 +678,18 @@ function VariableInsertionPlugin({
   onVariableInserted: () => void;
 }) {
   const [editor] = useLexicalComposerContext();
+  const [triggerPosition, setTriggerPosition] = useState<{ startOffset: number; endOffset: number; node: TextNode } | null>(null);
 
   // Insert variable when variableToInsert changes
   useEffect(() => {
-    if (variableToInsert) {
+    if (variableToInsert && triggerPosition) {
       editor.update(() => {
         const selection = $getSelection();
         if ($isRangeSelection(selection)) {
+          // Replace the @ trigger text with the variable
+          const { startOffset, endOffset, node } = triggerPosition;
+          
+          // Create the variable node
           const prefix = variableToInsert.type === 'prompt' ? '[[' : '{{';
           const suffix = variableToInsert.type === 'prompt' ? ']]' : '}}';
           const variableNode = $createVariableNode(
@@ -674,12 +697,64 @@ function VariableInsertionPlugin({
             variableToInsert.type,
             `${prefix}${variableToInsert.name}${suffix}`
           );
-          selection.insertNodes([variableNode]);
+
+          // Remove the @ trigger text and insert the variable
+          const textBefore = node.getTextContent().slice(0, startOffset);
+          const textAfter = node.getTextContent().slice(endOffset);
+          
+          // Split the text node and insert the variable in between
+          let newSelection: RangeSelection | null = null;
+          if (textBefore.length > 0) {
+            node.setTextContent(textBefore);
+            if (textAfter.length > 0) {
+              const afterTextNode = $createTextNode(textAfter);
+              node.insertAfter(afterTextNode);
+              node.insertAfter(variableNode);
+              // Position cursor at the start of the text after the variable
+              newSelection = $createRangeSelection();
+              newSelection.anchor.set(afterTextNode.getKey(), 0, 'text');
+              newSelection.focus.set(afterTextNode.getKey(), 0, 'text');
+            } else {
+              // Add a space after the variable and position cursor there
+              const spaceNode = $createTextNode(' ');
+              node.insertAfter(spaceNode);
+              node.insertAfter(variableNode);
+              newSelection = $createRangeSelection();
+              newSelection.anchor.set(spaceNode.getKey(), 0, 'text');
+              newSelection.focus.set(spaceNode.getKey(), 0, 'text');
+            }
+          } else {
+            if (textAfter.length > 0) {
+              const afterTextNode = $createTextNode(textAfter);
+              node.replace(variableNode);
+              variableNode.insertAfter(afterTextNode);
+              // Position cursor at the start of the text after the variable
+              newSelection = $createRangeSelection();
+              newSelection.anchor.set(afterTextNode.getKey(), 0, 'text');
+              newSelection.focus.set(afterTextNode.getKey(), 0, 'text');
+                          } else {
+                // Add a space after the variable and position cursor there
+                const spaceNode = $createTextNode(' ');
+                node.replace(variableNode);
+                variableNode.insertAfter(spaceNode);
+                newSelection = $createRangeSelection();
+                newSelection.anchor.set(spaceNode.getKey(), 0, 'text');
+                newSelection.focus.set(spaceNode.getKey(), 0, 'text');
+              }
+          }
+          
+          // Set the new selection
+          if (newSelection) {
+            $setSelection(newSelection);
+          }
+          
+          // Clear the trigger position
+          setTriggerPosition(null);
         }
       });
       onVariableInserted();
     }
-  }, [editor, variableToInsert, onVariableInserted]);
+  }, [editor, variableToInsert, onVariableInserted, triggerPosition]);
 
   useEffect(() => {
     return editor.registerTextContentListener((textContent) => {
@@ -687,8 +762,8 @@ function VariableInsertionPlugin({
       const atIndex = textContent.lastIndexOf('@');
       if (atIndex !== -1) {
         const afterAt = textContent.slice(atIndex + 1);
-        // If there's an @ followed by word characters and then a space or end
-        if (afterAt.match(/^\w+(\s|$)/)) {
+        // Trigger on @ alone OR @ followed by optional word characters
+        if (afterAt === '' || afterAt.match(/^\w*$/)) {
           editor.update(() => {
             const selection = $getSelection();
             if ($isRangeSelection(selection)) {
@@ -697,6 +772,14 @@ function VariableInsertionPlugin({
                 const textBefore = anchorNode.getTextContent().slice(0, selection.anchor.offset);
                 const lastAtIndex = textBefore.lastIndexOf('@');
                 if (lastAtIndex !== -1) {
+                  // Store the position of the @ trigger for later replacement
+                  const endOffset = lastAtIndex + 1 + afterAt.length;
+                  setTriggerPosition({
+                    startOffset: lastAtIndex,
+                    endOffset: endOffset,
+                    node: anchorNode
+                  });
+                  
                   // Get cursor position for popup
                   const rect = window.getSelection()?.getRangeAt(0).getBoundingClientRect();
                   if (rect) {

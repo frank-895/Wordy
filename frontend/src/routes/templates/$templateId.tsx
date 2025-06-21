@@ -8,7 +8,6 @@ export const Route = createFileRoute('/templates/$templateId')({
 
 interface FormFields {
   placeholders: string[];
-  prompts: string[];
 }
 
 function TemplateForm() {
@@ -23,7 +22,6 @@ function TemplateForm() {
   
   // Form state for user inputs
   const [contextMap, setContextMap] = useState<Record<string, string>>({})
-  const [promptMap, setPromptMap] = useState<Record<string, string>>({})
 
   // Generate a session ID when component mounts
   useEffect(() => {
@@ -50,18 +48,12 @@ function TemplateForm() {
       
       // Initialize form state with empty values
       const initialContext: Record<string, string> = {}
-      const initialPrompts: Record<string, string> = {}
       
       for (const placeholder of data.placeholders) {
         initialContext[placeholder] = ''
       }
       
-      for (const prompt of data.prompts) {
-        initialPrompts[prompt] = ''
-      }
-      
       setContextMap(initialContext)
-      setPromptMap(initialPrompts)
       
     } catch (err) {
       setError(`Failed to fetch template fields: ${err instanceof Error ? err.message : 'Unknown error'}`)
@@ -78,16 +70,11 @@ function TemplateForm() {
     setContextMap(prev => ({ ...prev, [key]: value }))
   }
 
-  const handlePromptChange = (key: string, value: string) => {
-    setPromptMap(prev => ({ ...prev, [key]: value }))
-  }
-
   const validateForm = (): boolean => {
     // Check if all required fields are filled
     const emptyPlaceholders = formFields?.placeholders.filter(p => !contextMap[p]?.trim()) || []
-    const emptyPrompts = formFields?.prompts.filter(p => !promptMap[p]?.trim()) || []
     
-    if (emptyPlaceholders.length > 0 || emptyPrompts.length > 0) {
+    if (emptyPlaceholders.length > 0) {
       setGenerateMessage('Please fill in all fields before generating the document.')
       return false
     }
@@ -110,7 +97,6 @@ function TemplateForm() {
         body: JSON.stringify({
           template_id: templateId,
           context_map: contextMap,
-          prompt_map: promptMap,
         }),
       })
 
@@ -181,7 +167,7 @@ function TemplateForm() {
     return null
   }
 
-  const hasFields = formFields.placeholders.length > 0 || formFields.prompts.length > 0
+  const hasFields = formFields.placeholders.length > 0
 
   return (
     <div className="py-4">
@@ -199,7 +185,7 @@ function TemplateForm() {
           Fill Template #{templateId}
         </h1>
         <p className="text-gray-600">
-          Fill in the variables and prompts below to generate your document
+          Fill in the variables below to generate your document
         </p>
       </div>
 
@@ -213,7 +199,7 @@ function TemplateForm() {
           </div>
           <h3 className="text-xl font-semibold text-gray-900 mb-2">No variables found</h3>
           <p className="text-gray-600 mb-4">
-            This template doesn't have any variables or prompts to fill
+            This template doesn't have any variables to fill
           </p>
         </div>
       ) : (
@@ -247,34 +233,7 @@ function TemplateForm() {
             </div>
           )}
 
-          {/* Prompts Section */}
-          {formFields.prompts.length > 0 && (
-            <div className="bg-white rounded-lg shadow-md p-6">
-              <h2 className="text-xl font-bold text-gray-900 mb-4">
-                AI Prompts ({formFields.prompts.length})
-              </h2>
-              <div className="space-y-4">
-                {formFields.prompts.map((prompt) => (
-                  <div key={prompt}>
-                    <label 
-                      htmlFor={`prompt-${prompt}`}
-                      className="block text-sm font-medium text-gray-700 mb-2"
-                    >
-                      {prompt} <span className="text-red-500">*</span>
-                    </label>
-                    <textarea
-                      id={`prompt-${prompt}`}
-                      value={promptMap[prompt] || ''}
-                      onChange={(e) => handlePromptChange(prompt, e.target.value)}
-                      placeholder={`Enter AI prompt for ${prompt}`}
-                      rows={3}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+
 
           {/* Context Management Section */}
           <div className="bg-white rounded-lg shadow-md p-6">
