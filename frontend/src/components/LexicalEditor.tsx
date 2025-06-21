@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { 
   $createParagraphNode, 
+  $createTextNode,
   $getRoot, 
   $getSelection, 
   $isRangeSelection,
@@ -801,11 +802,63 @@ interface JsonOutput {
   prompt_map: Record<string, string>;
 }
 
-export function LexicalEditor() {
+// Plugin to load template content from custom format
+function TemplateLoaderPlugin({ templateData }: { templateData: any }) {
+  const [editor] = useLexicalComposerContext();
+  
+  useEffect(() => {
+    if (templateData?.lexical_json?.root?.children) {
+      editor.update(() => {
+        const root = $getRoot();
+        root.clear();
+        
+        // Convert custom format back to Lexical nodes
+        for (const child of templateData.lexical_json.root.children) {
+          let node;
+          
+          if (child.type === 'heading') {
+            node = $createHeadingNode(child.level as HeadingTagType || 'h1');
+          } else if (child.type === 'quote') {
+            node = $createQuoteNode();
+          } else {
+            // Default to paragraph
+            node = $createParagraphNode();
+          }
+          
+          // Add text children
+          if (child.children) {
+            for (const textChild of child.children) {
+              if (textChild.type === 'text' && textChild.text) {
+                const textNode = $createTextNode(textChild.text);
+                // Apply formatting if present
+                if (textChild.format) {
+                  if (textChild.format & 1) textNode.toggleFormat('bold');
+                  if (textChild.format & 2) textNode.toggleFormat('italic');
+                  if (textChild.format & 4) textNode.toggleFormat('strikethrough');
+                  if (textChild.format & 8) textNode.toggleFormat('underline');
+                }
+                node.append(textNode);
+              }
+            }
+          }
+          
+          root.append(node);
+        }
+      });
+    }
+  }, [editor, templateData]);
+  
+  return null;
+}
+
+export function LexicalEditor({ templateId }: { templateId?: string }) {
   const [jsonOutput, setJsonOutput] = useState<JsonOutput | null>(null);
   const [templateName, setTemplateName] = useState<string>('');
   const [isSaving, setIsSaving] = useState<boolean>(false);
   const [saveMessage, setSaveMessage] = useState<string>('');
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [loadError, setLoadError] = useState<string>('');
+  const [templateData, setTemplateData] = useState<any>(null);
 
   const initialConfig = {
     namespace: 'WordAIEditor',
@@ -814,6 +867,40 @@ export function LexicalEditor() {
     onError: (error: Error) => {
       console.error('Lexical error:', error);
     },
+  };
+
+  // Load template data when templateId is provided
+  useEffect(() => {
+    if (templateId) {
+      loadTemplate(templateId);
+    }
+  }, [templateId]);
+
+
+  const loadTemplate = async (id: string) => {
+    setIsLoading(true);
+    setLoadError('');
+
+    try {
+      const response = await fetch(`/api/template/${id}/`);
+      
+      if (!response.ok) {
+        if (response.status === 404) {
+          throw new Error('Template not found');
+        }
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const data = await response.json();
+
+      setTemplateName(data.name);
+      setTemplateData(data);
+      
+    } catch (err) {
+      setLoadError(`Failed to load template: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const onChange = (editorState: EditorState) => {
@@ -831,8 +918,12 @@ export function LexicalEditor() {
     setSaveMessage('');
 
     try {
-      const response = await fetch('/api/template/add/', {
-        method: 'POST',
+      const isEditing = !!templateId;
+      const url = isEditing ? `/api/template/${templateId}/edit/` : '/api/template/add/';
+      const method = isEditing ? 'PUT' : 'POST';
+
+      const response = await fetch(url, {
+        method,
         headers: {
           'Content-Type': 'application/json',
         },
@@ -844,11 +935,13 @@ export function LexicalEditor() {
 
       if (response.ok) {
         const result = await response.json();
-        setSaveMessage(`Template "${result.name}" saved successfully with ID: ${result.id}`);
-        setTemplateName(''); // Clear the template name after successful save
+        setSaveMessage(`Template "${result.name}" ${isEditing ? 'updated' : 'saved'} successfully with ID: ${result.id}`);
+        if (!isEditing) {
+          setTemplateName(''); // Clear the template name after successful save (only for new templates)
+        }
       } else {
         const error = await response.json();
-        setSaveMessage(`Error saving template: ${error.error || 'Unknown error'}`);
+        setSaveMessage(`Error ${isEditing ? 'updating' : 'saving'} template: ${error.error || 'Unknown error'}`);
       }
     } catch (error) {
       setSaveMessage(`Network error: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -857,10 +950,43 @@ export function LexicalEditor() {
     }
   };
 
+  // Show loading state when loading template
+  if (isLoading) {
+    return (
+      <div className="w-full max-w-4xl mx-auto">
+        <div className="bg-white border border-gray-300 rounded-lg p-8 text-center">
+          <div className="inline-block w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+          <p className="mt-4 text-gray-600">Loading template...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show error state when loading template fails
+  if (loadError) {
+    return (
+      <div className="w-full max-w-4xl mx-auto">
+        <div className="bg-white border border-gray-300 rounded-lg p-8">
+          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+            <strong className="font-bold">Error: </strong>
+            <span>{loadError}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => templateId && loadTemplate(templateId)}
+            className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
+          >
+            Try Again
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="w-full max-w-4xl mx-auto">
       <div className="bg-white border border-gray-300 rounded-lg overflow-hidden shadow-sm">
-        <LexicalComposer initialConfig={initialConfig}>
+        <LexicalComposer initialConfig={initialConfig} key={templateId || 'new'}>
           <ToolbarPlugin />
           <div className="relative">
             <RichTextPlugin
@@ -884,13 +1010,15 @@ export function LexicalEditor() {
             <OnChangePlugin onChange={onChange} />
             <HistoryPlugin />
             <ListPlugin />
+            {/* Load template content using standard Lexical approach */}
+            <TemplateLoaderPlugin templateData={templateData} />
           </div>
         </LexicalComposer>
       </div>
 
       {/* Save Template Section */}
       <div className="mt-6 bg-white p-4 rounded-lg border border-gray-300">
-        <h3 className="font-bold mb-3">Save Template</h3>
+        <h3 className="font-bold mb-3">{templateId ? 'Update Template' : 'Save Template'}</h3>
         <div className="flex gap-3 items-end">
           <div className="flex-1">
             <label htmlFor="templateName" className="block text-sm font-medium text-gray-700 mb-1">
@@ -915,10 +1043,10 @@ export function LexicalEditor() {
             {isSaving ? (
               <>
                 <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                Saving...
+                {templateId ? 'Updating...' : 'Saving...'}
               </>
             ) : (
-              'Save Template'
+              templateId ? 'Update Template' : 'Save Template'
             )}
           </button>
         </div>

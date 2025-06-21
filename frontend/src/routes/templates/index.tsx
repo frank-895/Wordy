@@ -146,6 +146,13 @@ function TemplatesList() {
                       ID: {template.id}
                     </span>
                     <Link 
+                      to="/editor/$templateId" 
+                      params={{ templateId: template.id }}
+                      className="text-gray-600 hover:text-gray-800 text-sm font-medium px-3 py-1 border border-gray-400 rounded hover:bg-gray-50 transition-colors"
+                    >
+                      Edit
+                    </Link>
+                    <Link 
                       to="/templates/$templateId" 
                       params={{ templateId: template.id }}
                       className="text-blue-600 hover:text-blue-800 text-sm font-medium px-3 py-1 border border-blue-600 rounded hover:bg-blue-50 transition-colors"
