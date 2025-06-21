@@ -12,7 +12,7 @@ import os
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 # Django setup
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'wordAI.settings')
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'Wordy.settings')
 import django
 django.setup()
 

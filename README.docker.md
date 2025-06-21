@@ -1,4 +1,4 @@
-# Docker Setup for WordAI
+# Docker Setup for Wordy
 
 This project includes a complete Docker setup with PostgreSQL, Django backend,
 and Vite frontend with HTTPS support using mkcert.
@@ -43,9 +43,9 @@ your host system and trusted by your browser.
 
 The setup uses the following default environment variables:
 
-- `POSTGRES_DB=wordai`
-- `POSTGRES_USER=wordai_user`
-- `POSTGRES_PASSWORD=wordai_password`
+- `POSTGRES_DB=wordy`
+- `POSTGRES_USER=wordy_user`
+- `POSTGRES_PASSWORD=wordy_password`
 - `DEBUG=1`
 
 You can override these by creating a `.env` file or modifying the

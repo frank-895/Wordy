@@ -2,15 +2,15 @@ services:
   db:
     image: postgres:15
     environment:
-      POSTGRES_DB: wordai
-      POSTGRES_USER: wordai_user
-      POSTGRES_PASSWORD: wordai_password
+      POSTGRES_DB: wordy
+      POSTGRES_USER: wordy_user
+      POSTGRES_PASSWORD: wordy_password
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
       - "5432:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U wordai_user -d wordai"]
+      test: ["CMD-SHELL", "pg_isready -U wordy_user -d wordy"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -21,10 +21,11 @@ services:
       dockerfile: Dockerfile.backend
     environment:
       - DEBUG=1
-      - DATABASE_URL=postgresql://wordai_user:wordai_password@db:5432/wordai
-      - POSTGRES_DB=wordai
       - POSTGRES_USER=wordai_user
-      - POSTGRES_PASSWORD=wordai_password
+      - DATABASE_URL=postgresql://wordy_user:wordy_password@db:5432/wordy
+      - POSTGRES_DB=wordy
+      - POSTGRES_USER=wordy_user
+      - POSTGRES_PASSWORD=wordy_password
       - POSTGRES_HOST=db
       - POSTGRES_PORT=5432
     volumes:
