@@ -2,6 +2,7 @@ import json
 from django.http import JsonResponse, HttpResponse, HttpResponseNotAllowed
 from django.views.decorators.csrf import csrf_exempt
 from .models import Template
+
 from .services.document_pipeline import process_lexical_document
 from .services.lexical_processor import parse_lexical_json
 from django.core.exceptions import ObjectDoesNotExist
@@ -12,6 +13,7 @@ def save_template(request):
     POST: Save a new Lexical JSON template.
     Body: { "name": "My Template", "lexical_json": {...} }
     """
+
     if request.method != 'POST':
         return HttpResponseNotAllowed(['POST'])
 
