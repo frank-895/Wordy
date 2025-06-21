@@ -1,7 +1,7 @@
 from django.urls import path
 from .views import (
     create_template, list_templates, get_template, update_template, 
-    delete_template, template_fields, generate_document
+    delete_template, template_fields, generate_document, extract_template_fields_view
 )
 
 urlpatterns = [
@@ -15,4 +15,7 @@ urlpatterns = [
     
     # Document generation endpoint
     path('generate_doc/', generate_document, name='generate_document'),
+    
+    # Template fields extraction endpoint
+    path('extract_fields/', extract_template_fields_view, name='extract_template_fields'),
 ]

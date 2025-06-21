@@ -1,12 +1,13 @@
 import json
 from django.http import JsonResponse, HttpResponse, HttpResponseNotAllowed
 from django.views.decorators.csrf import csrf_exempt
-from .models import Template
-
+from django.views.decorators.http import require_http_methods
+from django.shortcuts import get_object_or_404
+from django.core.exceptions import ObjectDoesNotExist
+from .models import Template, Document, DocumentChunk
 from .services.document_pipeline import process_lexical_document
 from .services.lexical_processor import parse_lexical_json
-from .services.placeholder_resolver import resolve_placeholders
-from django.core.exceptions import ObjectDoesNotExist
+from .services.placeholder_resolver import resolve_placeholders, extract_template_fields
 
 # Import RAG pipeline for context retrieval
 from rag_pipeline.services.rag_pipeline import RAGPipeline
@@ -34,13 +35,22 @@ def create_template(request):
 
 def list_templates(request):
     """
-    GET: List all available templates.
+    GET: List all templates.
     """
     if request.method != 'GET':
         return HttpResponseNotAllowed(['GET'])
 
-    templates = Template.objects.all().values('id', 'name', 'created_at')
-    return JsonResponse({'templates': list(templates)})
+    templates = Template.objects.all()
+    template_list = []
+    
+    for template in templates:
+        template_list.append({
+            'id': template.id,
+            'name': template.name,
+            'created_at': template.created_at.isoformat()
+        })
+    
+    return JsonResponse({'templates': template_list})
 
 
 def get_template(request, template_id):
@@ -52,15 +62,14 @@ def get_template(request, template_id):
 
     try:
         template = Template.objects.get(id=template_id)
+        return JsonResponse({
+            'id': template.id,
+            'name': template.name,
+            'lexical_json': template.lexical_json,
+            'created_at': template.created_at.isoformat()
+        })
     except ObjectDoesNotExist:
         return JsonResponse({'error': 'Template not found.'}, status=404)
-
-    return JsonResponse({
-        'id': template.id,
-        'name': template.name,
-        'lexical_json': template.lexical_json,
-        'created_at': template.created_at
-    })
 
 
 @csrf_exempt
@@ -130,14 +139,31 @@ def template_fields(request, template_id):
     placeholders = set()
     prompts = set()
 
+    def extract_placeholders_from_text(text):
+        """Extract placeholders and prompts from text."""
+        placeholders.update(re.findall(placeholder_pattern, text))
+        prompts.update(re.findall(prompt_pattern, text))
+
     for block in blocks:
-        if isinstance(block[1], str):
-            placeholders.update(re.findall(placeholder_pattern, block[1]))
-            prompts.update(re.findall(prompt_pattern, block[1]))
-        elif isinstance(block[1], list):  # list block
-            for item in block[1]:
-                placeholders.update(re.findall(placeholder_pattern, item))
-                prompts.update(re.findall(prompt_pattern, item))
+        block_type = block[0]
+        content = block[1]
+
+        if isinstance(content, str):
+            # Handle plain text content
+            extract_placeholders_from_text(content)
+        elif isinstance(content, list):
+            # Handle formatted text segments
+            for segment in content:
+                if isinstance(segment, dict) and 'text' in segment:
+                    # Extract from formatted text segment
+                    extract_placeholders_from_text(segment['text'])
+                elif isinstance(segment, str):
+                    # Extract from plain text segment
+                    extract_placeholders_from_text(segment)
+        elif isinstance(content, list) and all(isinstance(item, str) for item in content):
+            # Handle list items (plain text)
+            for item in content:
+                extract_placeholders_from_text(item)
 
     return JsonResponse({
         'placeholders': sorted(placeholders),
@@ -146,76 +172,86 @@ def template_fields(request, template_id):
 
 
 @csrf_exempt
+@require_http_methods(["POST"])
 def generate_document(request):
     """
-    POST: Fill a saved template with context and prompt data and return a .docx
-    Body: {
-        "template_id": 1,
-        "context_map": { "name": "Alice" },
-        "prompt_map": { "summary": "Write a short summary about {{name}}" }
-    }
-    
-    The system will:
-    1. Extract all prompts from prompt_map
-    2. Use RAG pipeline to find top 3 most relevant chunks as context
-    3. Pass context as secondary information to LLM prompts
+    Generate a PDF document from Lexical JSON content.
     """
-    if request.method != 'POST':
-        return HttpResponseNotAllowed(['POST'])
-
     try:
         data = json.loads(request.body)
-        template_id = data['template_id']
-        context_map = data['context_map']
+        template_id = data.get('template_id')
+        context_map = data.get('context_map', {})
         prompt_map = data.get('prompt_map', {})
-    except (KeyError, json.JSONDecodeError):
-        return JsonResponse({'error': 'Invalid input. Required: template_id, context_map.'}, status=400)
-
-    try:
-        template = Template.objects.get(id=template_id)
-    except ObjectDoesNotExist:
-        return JsonResponse({'error': 'Template not found.'}, status=404)
-
-    try:
-        # Initialize RAG pipeline for context retrieval
-        rag_pipeline = RAGPipeline()
         
-        # Extract all prompts from prompt_map to create a search query
-        all_prompts = []
-        for prompt_key, prompt_template in prompt_map.items():
-            # Resolve placeholders in the prompt template to get the actual prompt text
-            resolved_prompt = resolve_placeholders(prompt_template, context_map)
-            all_prompts.append(resolved_prompt)
+        if not template_id:
+            return JsonResponse({'error': 'template_id is required'}, status=400)
         
-        # Combine all prompts into a single search query
-        search_query = " ".join(all_prompts) if all_prompts else "document generation"
+        # Fetch the template from the database
+        try:
+            template = Template.objects.get(id=template_id)
+        except Template.DoesNotExist:
+            return JsonResponse({'error': 'Template not found'}, status=404)
+        lexical_json = template.lexical_json
         
-        # Get top 3 most relevant chunks as context
-        relevant_chunks = rag_pipeline.get_similar_chunks_internal(search_query, top_k=3)
+        # Get context info if template_id is provided
+        context_info = None
+        try:
+            chunks = DocumentChunk.objects.filter(document__id=template_id)
+            context_info = [
+                {
+                    'content': chunk.content,
+                    'metadata': {
+                        'source': chunk.document.name,
+                        'chunk_id': chunk.id
+                    }
+                }
+                for chunk in chunks
+            ]
+        except DocumentChunk.DoesNotExist:
+            context_info = []
         
-        # Format context from relevant chunks
-        context_info = []
-        for chunk in relevant_chunks:
-            context_info.append({
-                'content': chunk['content'],
-                'document_name': chunk['document_name'],
-                'similarity_score': chunk['similarity_score']
-            })
-        
-        # Pass context to document generation process
-        docx_buffer = process_lexical_document(
-            template.lexical_json, 
+        # Process the document
+        pdf_buffer = process_lexical_document(
+            lexical_json, 
             context_map, 
             prompt_map, 
             context_info
         )
         
+        # Create response with PDF content
         response = HttpResponse(
-            docx_buffer.read(),
-            content_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+            pdf_buffer.getvalue(),
+            content_type='application/pdf'
         )
-        response['Content-Disposition'] = 'attachment; filename="output.docx"'
+        response['Content-Disposition'] = 'attachment; filename="generated_document.pdf"'
+        
         return response
-
+        
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Invalid JSON'}, status=400)
     except Exception as e:
-        return JsonResponse({'error': f"Document generation failed: {str(e)}"}, status=500)
+        return JsonResponse({'error': str(e)}, status=500)
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def extract_template_fields_view(request):
+    """
+    Extract template fields from Lexical JSON content.
+    """
+    try:
+        data = json.loads(request.body)
+        lexical_json = data.get('lexical_json')
+        
+        if not lexical_json:
+            return JsonResponse({'error': 'lexical_json is required'}, status=400)
+        
+        fields = extract_template_fields(lexical_json)
+        
+        return JsonResponse({
+            'template_fields': fields
+        })
+        
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Invalid JSON'}, status=400)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
