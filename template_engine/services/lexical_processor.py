@@ -26,11 +26,6 @@ def parse_lexical_json(lexical_json):
                 text = extract_text(children)
                 blocks.append(('quote', text))
 
-            elif node_type == 'code':
-                language = node.get('language', 'text')
-                text = extract_text(children)
-                blocks.append(('code', text, language))
-
             elif node_type == 'list':
                 list_type = node.get('listType', 'bullet')
                 items = []
