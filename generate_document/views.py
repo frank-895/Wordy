@@ -1,7 +1,9 @@
 import json
 from django.http import HttpResponse, JsonResponse
+from django.views.decorators.csrf import csrf_exempt
 from .services.document_pipeline import process_lexical_document
 
+@csrf_exempt
 def generate_docx(request):
     if request.method != 'POST':
         return HttpResponse(status=405)
