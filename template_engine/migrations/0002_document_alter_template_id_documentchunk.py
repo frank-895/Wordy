@@ -8,7 +8,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('generate_document', '0001_initial'),
+        ('template_engine', '0001_initial'),
     ]
 
     operations = [
@@ -41,7 +41,7 @@ class Migration(migrations.Migration):
                 ('embedding', models.JSONField(blank=True, null=True)),
                 ('metadata', models.JSONField(blank=True, default=dict)),
                 ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('document', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='chunks', to='generate_document.document')),
+                ('document', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='chunks', to='template_engine.document')),
             ],
             options={
                 'ordering': ['document', 'chunk_index'],

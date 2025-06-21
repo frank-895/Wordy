@@ -46,7 +46,7 @@ INSTALLED_APPS = [
     'rest_framework',
     'django_vite',
     'corsheaders',
-    'generate_document',
+    'template_engine',
     'rag_pipeline',
 ]
 
