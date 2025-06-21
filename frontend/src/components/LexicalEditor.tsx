@@ -49,8 +49,7 @@ import {
   AtSign,
   Edit3,
   X,
-  Save,
-  Settings
+  Save
 } from 'lucide-react';
 import { LexicalComposer } from '@lexical/react/LexicalComposer';
 import { ContentEditable } from '@lexical/react/LexicalContentEditable';
@@ -149,13 +148,25 @@ export class VariableNode extends TextNode {
     
     element.style.padding = '1px 3px';
     element.style.borderRadius = '3px';
-    element.style.cursor = 'default';
+    element.style.cursor = 'pointer';
     element.style.textDecoration = 'none';
     element.style.display = 'inline';
     element.style.userSelect = 'none';
+    element.style.transition = 'all 0.2s ease';
+    
+    // Add hover effect
+    element.addEventListener('mouseenter', () => {
+      element.style.transform = 'scale(1.05)';
+      element.style.boxShadow = '0 2px 4px rgba(0,0,0,0.1)';
+    });
+    
+    element.addEventListener('mouseleave', () => {
+      element.style.transform = 'scale(1)';
+      element.style.boxShadow = 'none';
+    });
     element.setAttribute('data-variable-id', this.__variableId);
     element.setAttribute('data-variable-type', this.__variableType);
-    element.title = `${this.__variableType === 'prompt' ? 'AI Prompt' : 'Variable'}: ${this.__variableId} (Double-click to edit)`;
+    element.title = `${this.__variableType === 'prompt' ? 'AI Prompt' : 'Variable'}: ${this.__variableId} (Click to edit)`;
     // Remove contenteditable to prevent cursor trapping
     element.setAttribute('contenteditable', 'false');
     return element;
@@ -469,114 +480,7 @@ function VariablePopup({
   );
 }
 
-// Variables Sidebar Component
-function VariablesSidebar({ 
-  variables, 
-  onEditVariable, 
-  onDeleteVariable, 
-  isOpen, 
-  onToggle 
-}: {
-  variables: VariableDefinition[];
-  onEditVariable: (variable: VariableDefinition) => void;
-  onDeleteVariable: (variableId: string) => void;
-  isOpen: boolean;
-  onToggle: () => void;
-}) {
-  return (
-    <>
-      <button
-        type="button"
-        onClick={onToggle}
-        className="fixed right-4 top-4 bg-blue-500 text-white p-2 rounded-full shadow-lg hover:bg-blue-600 z-40"
-        title="Toggle Variables Panel"
-      >
-        <Settings className="w-5 h-5" />
-      </button>
 
-      {isOpen && (
-        <div className="fixed right-0 top-0 h-full w-80 bg-white border-l border-gray-300 shadow-lg z-30 overflow-y-auto">
-          <div className="p-4">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="font-semibold text-lg">Variables</h2>
-              <button
-                type="button"
-                onClick={onToggle}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {variables.length === 0 ? (
-              <p className="text-gray-500 text-sm">
-                No variables defined. Type @ in the editor to add variables.
-              </p>
-            ) : (
-              <div className="space-y-3">
-                {variables.map((variable) => (
-                  <div
-                    key={variable.id}
-                    className="border border-gray-200 rounded-lg p-3 hover:bg-gray-50"
-                  >
-                    <div className="flex items-center justify-between mb-2">
-                      <div>
-                        <span className={`font-medium text-sm ${(variable.type || 'variable') === 'prompt' ? 'text-purple-600' : 'text-blue-600'}`}>
-                          {(variable.type || 'variable') === 'prompt' ? '[[' : '{{'}
-                          {variable.name}
-                          {(variable.type || 'variable') === 'prompt' ? ']]' : '}}'}
-                        </span>
-                        <span className="text-xs text-gray-500 ml-2">
-                          {(variable.type || 'variable') === 'prompt' ? 'AI Prompt' : 'Variable'}
-                        </span>
-                      </div>
-                      <div className="flex gap-1">
-                        <button
-                          type="button"
-                          onClick={() => onEditVariable(variable)}
-                          className="text-blue-500 hover:text-blue-700 p-1"
-                          title="Edit variable"
-                        >
-                          <Edit3 className="w-3 h-3" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => onDeleteVariable(variable.id)}
-                          className="text-red-500 hover:text-red-700 p-1"
-                          title="Delete variable"
-                        >
-                          <X className="w-3 h-3" />
-                        </button>
-                      </div>
-                    </div>
-                    
-                    {variable.prompt && (
-                      <div className="mb-2">
-                        <span className="text-xs text-gray-600 font-medium">Prompt:</span>
-                        <p className="text-xs text-gray-700 mt-1 bg-blue-50 p-2 rounded">
-                          {variable.prompt}
-                        </p>
-                      </div>
-                    )}
-                    
-                    {variable.defaultValue && (
-                      <div>
-                        <span className="text-xs text-gray-600 font-medium">Default:</span>
-                        <p className="text-xs text-gray-700 mt-1">
-                          {variable.defaultValue}
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-    </>
-  );
-}
 
 // Toolbar button component
 function ToolbarButton({ 
@@ -665,6 +569,86 @@ function ColorPicker({
       />
     </div>
   );
+}
+
+// Variable Click Handler Plugin
+function VariableClickPlugin({ 
+  variables,
+  onEditVariable 
+}: { 
+  variables: VariableDefinition[];
+  onEditVariable: (variable: VariableDefinition, position: { x: number; y: number }) => void;
+}) {
+  const [editor] = useLexicalComposerContext();
+
+  useEffect(() => {
+    const handleClick = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      
+      // Check if the clicked element is a variable
+      if (target?.hasAttribute('data-variable-id')) {
+        event.preventDefault();
+        event.stopPropagation();
+        
+        const variableId = target.getAttribute('data-variable-id');
+        const variableType = (target.getAttribute('data-variable-type') as 'variable' | 'prompt') || 'variable';
+        
+        // Try to find the variable in the loaded variables array
+        let variable = variables.find(v => v.id === variableId);
+        
+        // If not found, create a temporary variable definition from the DOM element
+        if (!variable && variableId) {
+          // Extract the variable name from the element text content
+          const elementText = target.textContent || '';
+          let variableName = variableId;
+          
+          // Try to extract name from text like "{{varName}}" or "[[promptName]]"
+          if (elementText.includes('{{') && elementText.includes('}}')) {
+            const match = elementText.match(/\{\{([^}]+)\}\}/);
+            if (match) variableName = match[1];
+          } else if (elementText.includes('[[') && elementText.includes(']]')) {
+            const match = elementText.match(/\[\[([^\]]+)\]\]/);
+            if (match) variableName = match[1];
+          } else if (elementText.trim()) {
+            // If no brackets found, use the element text as is
+            variableName = elementText.trim();
+          }
+          
+          // Create a temporary variable definition
+          variable = {
+            id: variableId,
+            name: variableName,
+            type: variableType,
+            prompt: variableType === 'prompt' ? '' : undefined,
+            defaultValue: undefined,
+          };
+        }
+        
+        if (variable) {
+          // Get click position for popup
+          const rect = target.getBoundingClientRect();
+          const position = {
+            x: rect.left,
+            y: rect.bottom + 5
+          };
+          
+          onEditVariable(variable, position);
+        }
+      }
+    };
+
+    // Add click listener to the editor root
+    const rootElement = editor.getRootElement();
+    if (rootElement) {
+      rootElement.addEventListener('click', handleClick);
+      
+      return () => {
+        rootElement.removeEventListener('click', handleClick);
+      };
+    }
+  }, [editor, variables, onEditVariable]);
+
+  return null;
 }
 
 // Variable Insertion Plugin
@@ -1562,7 +1546,7 @@ export function LexicalEditor({ templateId }: { templateId?: string }) {
   const [showVariablePopup, setShowVariablePopup] = useState(false);
   const [popupPosition, setPopupPosition] = useState({ x: 0, y: 0 });
   const [editingVariable, setEditingVariable] = useState<VariableDefinition | undefined>();
-  const [showVariablesSidebar, setShowVariablesSidebar] = useState(false);
+
   const [variableToInsert, setVariableToInsert] = useState<VariableDefinition | null>(null);
 
   const initialConfig = {
@@ -1637,11 +1621,18 @@ export function LexicalEditor({ templateId }: { templateId?: string }) {
     if (!editingVariable) {
       setVariableToInsert(variable);
     }
+    
+    setShowVariablePopup(false);
+    setEditingVariable(undefined);
   };
 
-  const handleEditVariable = (variable: VariableDefinition) => {
+  const handleEditVariable = (variable: VariableDefinition, position?: { x: number; y: number }) => {
     setEditingVariable(variable);
-    setPopupPosition({ x: window.innerWidth / 2 - 160, y: window.innerHeight / 2 - 150 });
+    if (position) {
+      setPopupPosition(position);
+    } else {
+      setPopupPosition({ x: window.innerWidth / 2 - 160, y: window.innerHeight / 2 - 150 });
+    }
     setShowVariablePopup(true);
   };
 
@@ -1757,6 +1748,10 @@ export function LexicalEditor({ templateId }: { templateId?: string }) {
               variableToInsert={variableToInsert}
               onVariableInserted={() => setVariableToInsert(null)}
             />
+            <VariableClickPlugin 
+              variables={variables}
+              onEditVariable={handleEditVariable}
+            />
             {/* Load template content using standard Lexical approach */}
             <TemplateLoaderPlugin templateData={templateData} />
           </div>
@@ -1772,14 +1767,7 @@ export function LexicalEditor({ templateId }: { templateId?: string }) {
         position={popupPosition}
       />
 
-      {/* Variables Sidebar */}
-      <VariablesSidebar
-        variables={variables}
-        onEditVariable={handleEditVariable}
-        onDeleteVariable={handleDeleteVariable}
-        isOpen={showVariablesSidebar}
-        onToggle={() => setShowVariablesSidebar(!showVariablesSidebar)}
-      />
+
 
       {/* Save Template Section */}
       <div className="mt-6 bg-white p-4 rounded-lg border border-gray-300">
