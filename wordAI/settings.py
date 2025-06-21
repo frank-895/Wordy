@@ -47,6 +47,7 @@ INSTALLED_APPS = [
     'django_vite',
     'corsheaders',
     'generate_document',
+    'rag_pipeline',
 ]
 
 MIDDLEWARE = [
