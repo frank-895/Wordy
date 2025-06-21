@@ -2,12 +2,18 @@ from .lexical_processor import parse_lexical_json
 from .placeholder_resolver import resolve_placeholders, resolve_llm_prompts
 from .docx_generator import build_docx
 
-def process_lexical_document(lexical_json, context_map, prompt_map):
+def process_lexical_document(lexical_json, context_map, prompt_map, context_info=None):
     """
     Processes a Lexical JSON document by:
     - Parsing it into structured blocks
     - Resolving {{placeholders}} and [[prompt_keys]]
     - Generating a DOCX file
+    
+    Args:
+        lexical_json: The Lexical JSON content
+        context_map: Dictionary of placeholder values
+        prompt_map: Dictionary of prompt templates
+        context_info: Optional list of relevant document chunks for context
     """
     blocks = parse_lexical_json(lexical_json)
     processed_blocks = []
@@ -17,7 +23,7 @@ def process_lexical_document(lexical_json, context_map, prompt_map):
 
         if block_type in ('heading', 'paragraph', 'quote', 'code'):
             text = resolve_placeholders(block[1], context_map)
-            text = resolve_llm_prompts(text, context_map, prompt_map)
+            text = resolve_llm_prompts(text, context_map, prompt_map, context_info)
             if block_type == 'heading':
                 processed_blocks.append(('heading', text, block[2]))
             elif block_type == 'code':
@@ -27,7 +33,7 @@ def process_lexical_document(lexical_json, context_map, prompt_map):
 
         elif block_type == 'list':
             resolved_items = [
-                resolve_llm_prompts(resolve_placeholders(item, context_map), context_map, prompt_map)
+                resolve_llm_prompts(resolve_placeholders(item, context_map), context_map, prompt_map, context_info)
                 for item in block[1]
             ]
             processed_blocks.append(('list', resolved_items, block[2]))

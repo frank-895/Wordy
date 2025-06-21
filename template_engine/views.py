@@ -5,7 +5,11 @@ from .models import Template
 
 from .services.document_pipeline import process_lexical_document
 from .services.lexical_processor import parse_lexical_json
+from .services.placeholder_resolver import resolve_placeholders
 from django.core.exceptions import ObjectDoesNotExist
+
+# Import RAG pipeline for context retrieval
+from rag_pipeline.services.rag_pipeline import RAGPipeline
 
 @csrf_exempt
 def create_template(request):
@@ -150,6 +154,11 @@ def generate_document(request):
         "context_map": { "name": "Alice" },
         "prompt_map": { "summary": "Write a short summary about {{name}}" }
     }
+    
+    The system will:
+    1. Extract all prompts from prompt_map
+    2. Use RAG pipeline to find top 3 most relevant chunks as context
+    3. Pass context as secondary information to LLM prompts
     """
     if request.method != 'POST':
         return HttpResponseNotAllowed(['POST'])
@@ -168,7 +177,39 @@ def generate_document(request):
         return JsonResponse({'error': 'Template not found.'}, status=404)
 
     try:
-        docx_buffer = process_lexical_document(template.lexical_json, context_map, prompt_map)
+        # Initialize RAG pipeline for context retrieval
+        rag_pipeline = RAGPipeline()
+        
+        # Extract all prompts from prompt_map to create a search query
+        all_prompts = []
+        for prompt_key, prompt_template in prompt_map.items():
+            # Resolve placeholders in the prompt template to get the actual prompt text
+            resolved_prompt = resolve_placeholders(prompt_template, context_map)
+            all_prompts.append(resolved_prompt)
+        
+        # Combine all prompts into a single search query
+        search_query = " ".join(all_prompts) if all_prompts else "document generation"
+        
+        # Get top 3 most relevant chunks as context
+        relevant_chunks = rag_pipeline.get_similar_chunks_internal(search_query, top_k=3)
+        
+        # Format context from relevant chunks
+        context_info = []
+        for chunk in relevant_chunks:
+            context_info.append({
+                'content': chunk['content'],
+                'document_name': chunk['document_name'],
+                'similarity_score': chunk['similarity_score']
+            })
+        
+        # Pass context to document generation process
+        docx_buffer = process_lexical_document(
+            template.lexical_json, 
+            context_map, 
+            prompt_map, 
+            context_info
+        )
+        
         response = HttpResponse(
             docx_buffer.read(),
             content_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document'
