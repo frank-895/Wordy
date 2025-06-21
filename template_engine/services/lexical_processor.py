@@ -55,6 +55,50 @@ def parse_lexical_json(lexical_json):
                     'text': text,
                     'format': formatting
                 })
+            elif child.get('type') == 'variable':
+                # Handle variable nodes - extract the text content
+                text = child.get('text', '')
+                variable_id = child.get('variableId', '')
+                format_info = child.get('format', 0)
+                style = child.get('style', '')
+                
+                # Extract individual format flags
+                formatting = {
+                    'bold': bool(format_info & 1),  # 1 = BOLD
+                    'italic': bool(format_info & 2),  # 2 = ITALIC
+                    'underline': bool(format_info & 4),  # 4 = UNDERLINE
+                    'strikethrough': bool(format_info & 8),  # 8 = STRIKETHROUGH
+                    'underlineStrikethrough': bool(format_info & 12),  # 12 = UNDERLINE + STRIKETHROUGH
+                    'code': bool(format_info & 16),  # 16 = CODE
+                    'subscript': bool(format_info & 32),  # 32 = SUBSCRIPT
+                    'superscript': bool(format_info & 64),  # 64 = SUPERSCRIPT
+                    'variable_id': variable_id,  # Store variable ID for later processing
+                }
+                
+                # Extract font properties from style string
+                if style:
+                    # Parse CSS-like style string
+                    style_parts = style.split(';')
+                    for part in style_parts:
+                        part = part.strip()
+                        if ':' in part:
+                            property_name, value = part.split(':', 1)
+                            property_name = property_name.strip()
+                            value = value.strip()
+                            
+                            if property_name == 'font-family':
+                                formatting['font_name'] = value.strip("'\"")
+                            elif property_name == 'font-size':
+                                formatting['font_size'] = value
+                            elif property_name == 'color':
+                                formatting['font_color'] = value
+                            elif property_name == 'background-color':
+                                formatting['background_color'] = value
+                
+                formatted_segments.append({
+                    'text': text,
+                    'format': formatting
+                })
             elif child.get('type') == 'link':
                 # Handle links
                 url = child.get('url', '')

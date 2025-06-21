@@ -16,7 +16,7 @@ from rag_pipeline.models import Document, DocumentChunk
 def create_template(request):
     """
     POST: Save a new Lexical JSON template.
-    Body: { "name": "My Template", "lexical_json": {...} }
+    Body: { "name": "My Template", "lexical_json": {...}, "variables": [...] }
     """
 
     if request.method != 'POST':
@@ -26,10 +26,17 @@ def create_template(request):
         data = json.loads(request.body)
         name = data['name']
         lexical_json = data['lexical_json']
+        variables = data.get('variables', [])  # New: handle variables array
     except (KeyError, json.JSONDecodeError):
         return JsonResponse({'error': 'Invalid input. Required: name, lexical_json.'}, status=400)
 
-    template = Template.objects.create(name=name, lexical_json=lexical_json)
+    # Store both lexical_json and variables in the template
+    template_data = {
+        'lexical_json': lexical_json,
+        'variables': variables
+    }
+    
+    template = Template.objects.create(name=name, lexical_json=template_data)
     return JsonResponse({'id': template.id, 'name': template.name}, status=201)
 
 
@@ -58,10 +65,23 @@ def get_template(request, template_id):
 
     try:
         template = Template.objects.get(id=template_id)
+        template_data = template.lexical_json
+        
+        # Handle both old format (just lexical_json) and new format (with variables)
+        if isinstance(template_data, dict) and 'lexical_json' in template_data:
+            # New format with variables
+            lexical_json = template_data['lexical_json']
+            variables = template_data.get('variables', [])
+        else:
+            # Old format - just lexical_json
+            lexical_json = template_data
+            variables = []
+        
         return JsonResponse({
             'id': template.id,
             'name': template.name,
-            'lexical_json': template.lexical_json,
+            'lexical_json': lexical_json,
+            'variables': variables,
             'created_at': template.created_at.isoformat()
         })
     except Template.DoesNotExist:
@@ -74,7 +94,7 @@ def get_template(request, template_id):
 def update_template(request, template_id):
     """
     PUT: Update an existing template
-    Body: { "name": "Updated Name", "lexical_json": {...} }
+    Body: { "name": "Updated Name", "lexical_json": {...}, "variables": [...] }
     """
     if request.method != 'PUT':
         return HttpResponseNotAllowed(['PUT'])
@@ -83,13 +103,19 @@ def update_template(request, template_id):
         data = json.loads(request.body)
         name = data.get('name')
         lexical_json = data.get('lexical_json')
+        variables = data.get('variables', [])  # New: handle variables array
         
         template = Template.objects.get(id=template_id)
         
         if name is not None:
             template.name = name
         if lexical_json is not None:
-            template.lexical_json = lexical_json
+            # Store both lexical_json and variables in the template
+            template_data = {
+                'lexical_json': lexical_json,
+                'variables': variables
+            }
+            template.lexical_json = template_data
             
         template.save()
         
@@ -138,7 +164,23 @@ def template_fields(request, template_id):
 
     try:
         template = Template.objects.get(id=template_id)
-        fields = extract_template_fields(template.lexical_json)
+        template_data = template.lexical_json
+        
+        # Handle both old format (just lexical_json) and new format (with variables)
+        if isinstance(template_data, dict) and 'lexical_json' in template_data:
+            # New format with variables
+            lexical_json = template_data['lexical_json']
+            variables = template_data.get('variables', [])
+        else:
+            # Old format - just lexical_json
+            lexical_json = template_data
+            variables = []
+        
+        fields = extract_template_fields(lexical_json)
+        
+        # Add variable information to the response
+        fields['variables'] = variables
+        
         return JsonResponse(fields)
     except Template.DoesNotExist:
         return JsonResponse({'error': 'Template not found'}, status=404)
@@ -166,7 +208,18 @@ def generate_document(request):
             template = Template.objects.get(id=template_id)
         except Template.DoesNotExist:
             return JsonResponse({'error': 'Template not found'}, status=404)
-        lexical_json = template.lexical_json
+        
+        template_data = template.lexical_json
+        
+        # Handle both old format (just lexical_json) and new format (with variables)
+        if isinstance(template_data, dict) and 'lexical_json' in template_data:
+            # New format with variables
+            lexical_json = template_data['lexical_json']
+            variables = template_data.get('variables', [])
+        else:
+            # Old format - just lexical_json
+            lexical_json = template_data
+            variables = []
         
         # Get context documents associated with this template
         context_info = []
@@ -188,12 +241,13 @@ def generate_document(request):
             # If there's an error getting context, continue without it
             context_info = []
         
-        # Process the document
+        # Process the document with variables
         pdf_buffer = process_lexical_document(
             lexical_json, 
             context_map, 
             prompt_map, 
-            context_info
+            context_info,
+            variables
         )
         
         # Create response with PDF content

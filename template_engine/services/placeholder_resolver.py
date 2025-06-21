@@ -35,6 +35,126 @@ def resolve_llm_prompts(text, context, prompts, context_info=None, start="[[", e
 
     return re.sub(pattern, llm_replace, text, flags=re.DOTALL)
 
+def resolve_variables_in_text(text, variables, context_map, prompt_map, context_info=None):
+    """
+    Resolve variable references in text using the new variable system.
+    
+    Args:
+        text: Text that may contain variable references
+        variables: List of variable definitions from the frontend
+        context_map: Dictionary of context values for {{placeholders}}
+        prompt_map: Dictionary of prompt templates for [[prompts]]
+        context_info: Optional list of relevant document chunks for context
+        
+    Returns:
+        Text with variables resolved
+    """
+    # Create a mapping from variable ID to variable definition
+    variable_map = {var['id']: var for var in variables}
+    
+    # First resolve any {{placeholders}} in the text
+    text = resolve_placeholders(text, context_map)
+    
+    # Then resolve any [[prompts]] in the text
+    text = resolve_llm_prompts(text, context_map, prompt_map, context_info)
+    
+    return text
+
+def resolve_variables_in_blocks(blocks, variables, context_map, prompt_map, context_info=None):
+    """
+    Resolve variables in processed blocks, handling both plain text and formatted segments.
+    
+    Args:
+        blocks: List of processed blocks from parse_lexical_json
+        variables: List of variable definitions from the frontend
+        context_map: Dictionary of context values
+        prompt_map: Dictionary of prompt templates
+        context_info: Optional list of relevant document chunks for context
+        
+    Returns:
+        List of blocks with variables resolved
+    """
+    resolved_blocks = []
+    
+    for block in blocks:
+        block_type = block[0]
+        content = block[1]
+        
+        if block_type in ('heading', 'paragraph', 'quote', 'code'):
+            if isinstance(content, str):
+                # Handle plain text content
+                resolved_text = resolve_variables_in_text(content, variables, context_map, prompt_map, context_info)
+                if block_type == 'heading':
+                    resolved_blocks.append(('heading', resolved_text, block[2]))
+                elif block_type == 'code':
+                    resolved_blocks.append(('code', resolved_text, block[2]))
+                else:
+                    resolved_blocks.append((block_type, resolved_text))
+            else:
+                # Handle formatted text segments
+                resolved_segments = []
+                for segment in content:
+                    text = segment['text']
+                    formatting = segment['format']
+                    
+                    # Check if this segment has a variable_id
+                    if 'variable_id' in formatting and formatting['variable_id']:
+                        # This is a variable segment - resolve it using the variable system
+                        variable_id = formatting['variable_id']
+                        variable_map = {var['id']: var for var in variables}
+                        variable_def = variable_map.get(variable_id)
+                        
+                        if variable_def:
+                            if variable_def['type'] == 'prompt':
+                                # This is a prompt variable - use the prompt template
+                                prompt_template = variable_def.get('prompt', '')
+                                if prompt_template:
+                                    # Resolve any {{placeholders}} in the prompt template
+                                    filled_prompt = resolve_placeholders(prompt_template, context_map)
+                                    # Call LLM to generate content
+                                    resolved_text = call_llm(filled_prompt, context_info)
+                                else:
+                                    resolved_text = variable_def.get('defaultValue', '')
+                            else:
+                                # This is a regular variable - use default value or context
+                                resolved_text = context_map.get(variable_def['name'], variable_def.get('defaultValue', ''))
+                        else:
+                            # Variable not found - use original text
+                            resolved_text = text
+                    else:
+                        # Regular text segment - resolve placeholders and prompts
+                        resolved_text = resolve_variables_in_text(text, variables, context_map, prompt_map, context_info)
+                    
+                    # Create new segment with resolved text
+                    new_formatting = {k: v for k, v in formatting.items() if k != 'variable_id'}
+                    resolved_segments.append({
+                        'text': resolved_text,
+                        'format': new_formatting
+                    })
+                
+                if block_type == 'heading':
+                    resolved_blocks.append(('heading', resolved_segments, block[2]))
+                elif block_type == 'code':
+                    # For code blocks, flatten to plain text
+                    text = ''.join(seg['text'] for seg in resolved_segments)
+                    resolved_blocks.append(('code', text, block[2]))
+                else:
+                    resolved_blocks.append((block_type, resolved_segments))
+        elif block_type == 'list':
+            # Handle list items
+            items = block[1]
+            list_type = block[2]
+            resolved_items = []
+            for item in items:
+                resolved_item = resolve_variables_in_text(item, variables, context_map, prompt_map, context_info)
+                resolved_items.append(resolved_item)
+            resolved_blocks.append(('list', resolved_items, list_type))
+        else:
+            # Pass through other block types unchanged
+            resolved_blocks.append(block)
+    
+    return resolved_blocks
+
 def extract_template_fields(lexical_json):
     """
     Extract all placeholders and prompt keys from Lexical JSON content.
