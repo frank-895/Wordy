@@ -21,7 +21,6 @@ services:
       dockerfile: Dockerfile.backend
     environment:
       - DEBUG=1
-      - POSTGRES_USER=wordai_user
       - DATABASE_URL=postgresql://wordy_user:wordy_password@db:5432/wordy
       - POSTGRES_DB=wordy
       - POSTGRES_USER=wordy_user
