@@ -1320,6 +1320,7 @@ function convertEditorStateToCustomFormat(editorState: EditorState, variables: V
     format?: number;
     style?: string;
     variableId?: string;
+    variableType?: 'variable' | 'prompt';
   }
 
   interface ChildNode {
@@ -1361,7 +1362,8 @@ function convertEditorStateToCustomFormat(editorState: EditorState, variables: V
         const textNode: TextNode = {
           type: 'variable',
           text: variableNode.getTextContent(),
-          variableId: variableNode.getVariableId()
+          variableId: variableNode.getVariableId(),
+          variableType: variableNode.getVariableType()
         };
         
         // Add format information if present
@@ -1462,6 +1464,7 @@ interface JsonOutput {
           format?: number;
           style?: string;
           variableId?: string;
+          variableType?: 'variable' | 'prompt';
         }>;
       }>;
     };
@@ -1511,7 +1514,15 @@ function TemplateLoaderPlugin({ templateData }: { templateData: any }) {
                 }
                 node.append(textNode);
               } else if (textChild.type === 'variable' && textChild.variableId) {
-                const variableNode = $createVariableNode(textChild.variableId, textChild.text);
+                // Try to get variable type from stored data, fallback to variables array, then default to 'variable'
+                let variableType = textChild.variableType;
+                if (!variableType && templateData.variables) {
+                  const variableDefinition = templateData.variables.find((v: VariableDefinition) => v.id === textChild.variableId);
+                  variableType = variableDefinition?.type || 'variable';
+                } else {
+                  variableType = variableType || 'variable';
+                }
+                const variableNode = $createVariableNode(textChild.variableId, variableType, textChild.text);
                 // Apply formatting if present
                 if (textChild.format) {
                   if (textChild.format & 1) variableNode.toggleFormat('bold');
