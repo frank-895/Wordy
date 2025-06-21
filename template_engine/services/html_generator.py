@@ -51,8 +51,8 @@ def get_css_styles() -> str:
             font-size: 12pt;
             line-height: 1.5;
             color: #000000;
-            margin: 1in;
-            max-width: 8.5in;
+            margin: 0;
+            padding: 0;
         }
         
         h1 {
@@ -154,8 +154,8 @@ def get_css_styles() -> str:
         }
         
         @page {
-            size: letter;
-            margin: 1in;
+            size: A4;
+            margin: 0.75in;
         }
     """
 
