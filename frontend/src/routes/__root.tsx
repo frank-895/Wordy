@@ -21,6 +21,12 @@ export const Route = createRootRoute({
               >
                 Editor
               </Link>
+              <Link 
+                to="/templates" 
+                className="text-gray-700 hover:text-blue-600 font-medium [&.active]:text-blue-600 [&.active]:font-semibold"
+              >
+                Templates
+              </Link>
             </div>
           </div>
         </nav>

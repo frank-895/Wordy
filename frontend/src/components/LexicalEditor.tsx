@@ -219,7 +219,7 @@ export function LexicalEditor() {
     setSaveMessage('');
 
     try {
-      const response = await fetch('http://localhost:8000/api/save_template/', {
+      const response = await fetch('http://localhost:8000/api/template/add/', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

@@ -35,14 +35,18 @@ function Index() {
         
         <div className="bg-white rounded-lg shadow-md p-6">
           <h2 className="text-2xl font-semibold text-gray-800 mb-4">
-            AI-Powered Features
+            Template Management
           </h2>
-          <ul className="text-gray-600 space-y-2">
-            <li>• Intelligent content suggestions</li>
-            <li>• Document structure optimization</li>
-            <li>• Real-time grammar and style checking</li>
-            <li>• Template generation</li>
-          </ul>
+          <p className="text-gray-600 mb-4">
+            Save and manage your document templates with variables and AI prompts 
+            for quick document generation.
+          </p>
+          <a 
+            href="/templates" 
+            className="inline-block bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700 transition-colors"
+          >
+            View Templates
+          </a>
         </div>
       </div>
     </div>
