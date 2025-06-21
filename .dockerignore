@@ -1,14 +1,4 @@
-node_modules
-npm-debug.log
-.git
-.gitignore
-README.md
-.env
-.nyc_output
-coverage
-.dist
-
-# Python
+# Python/Django specific ignores for backend build
 __pycache__
 *.pyc
 *.pyo
@@ -25,13 +15,31 @@ pip-delete-this-directory.txt
 # Django
 db.sqlite3
 staticfiles
+media/
+uploads/
 
-# OS
+# Environment files
+.env
+.env.local
+.env.production
+
+# Git and IDE
+.git
+.gitignore
+.vscode
+.idea
+
+# OS files
 .DS_Store
 Thumbs.db
 
-# IDE
-.vscode
-.idea
-*.swp
-*.swo 
+# Documentation
+README.md
+*.md
+
+# Frontend directory (not needed in backend container)
+frontend/
+
+# Docker files
+docker-compose.yml
+Dockerfile.* 

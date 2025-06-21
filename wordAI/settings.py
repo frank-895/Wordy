@@ -170,13 +170,12 @@ MEDIA_ROOT = BASE_DIR / 'media'
 # CORS Configuration for Office Add-in
 CORS_ALLOW_ALL_ORIGINS = DEBUG  # Only for development
 CORS_ALLOWED_ORIGINS = [
-    "https://localhost:3000",  # Office Add-in development server
-    "https://localhost:5173",  # Vite development server
-    "https://localhost:8000",  # Backend HTTPS
-    "https://officehome.msocdn.com",  # Office Online
-    "https://office.live.com",  # Office Online
-    "https://outlook.office.com",  # Outlook Online
-    "https://teams.microsoft.com",  # Teams
+    "http://localhost:3000",  # Frontend development server
+    "http://localhost:5173",  # Vite development server
+    "http://localhost:8000",  # Backend HTTP
+    "http://127.0.0.1:3000",  # Frontend development server
+    "http://127.0.0.1:5173",  # Vite development server
+    "http://127.0.0.1:8000",  # Backend HTTP
 ]
 
 CORS_ALLOW_CREDENTIALS = True
