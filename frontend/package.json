@@ -29,6 +29,7 @@
     "@tanstack/react-router": "^1.121.27",
     "@tanstack/react-router-devtools": "^1.121.27",
     "lexical": "^0.32.1",
+    "lucide-react": "^0.522.0",
     "react": "19.1.0",
     "react-dom": "19.1.0"
   },
