@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      '@lexical/clipboard':
+        specifier: ^0.32.1
+        version: 0.32.1
       '@lexical/code':
         specifier: ^0.32.1
         version: 0.32.1
@@ -20,6 +23,12 @@ importers:
       '@lexical/list':
         specifier: ^0.32.1
         version: 0.32.1
+      '@lexical/mark':
+        specifier: ^0.32.1
+        version: 0.32.1
+      '@lexical/markdown':
+        specifier: ^0.32.1
+        version: 0.32.1
       '@lexical/plain-text':
         specifier: ^0.32.1
         version: 0.32.1
@@ -27,6 +36,12 @@ importers:
         specifier: ^0.32.1
         version: 0.32.1(react-dom@19.1.0(react@19.1.0))(react@19.1.0)(yjs@13.6.27)
       '@lexical/rich-text':
+        specifier: ^0.32.1
+        version: 0.32.1
+      '@lexical/selection':
+        specifier: ^0.32.1
+        version: 0.32.1
+      '@lexical/text':
         specifier: ^0.32.1
         version: 0.32.1
       '@lexical/utils':

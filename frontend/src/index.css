@@ -55,7 +55,7 @@
 /* Ensure proper scrolling in Office environment */
 html, body {
   height: 100%;
-  overflow: hidden;
+  overflow: auto;
 }
 
 /* Custom styles can be added here */

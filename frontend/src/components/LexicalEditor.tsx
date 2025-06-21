@@ -1,120 +1,684 @@
-import React, { useEffect, useState } from 'react';
-import { $createParagraphNode, $getRoot, $getSelection, $isRangeSelection } from 'lexical';
+import { useCallback, useEffect, useState } from 'react';
+import { 
+  $createParagraphNode, 
+  $getRoot, 
+  $getSelection, 
+  $isRangeSelection,
+  FORMAT_ELEMENT_COMMAND,
+  FORMAT_TEXT_COMMAND,
+  INDENT_CONTENT_COMMAND,
+  OUTDENT_CONTENT_COMMAND,
+  REDO_COMMAND,
+  UNDO_COMMAND,
+  CAN_REDO_COMMAND,
+  CAN_UNDO_COMMAND,
+  SELECTION_CHANGE_COMMAND,
+} from 'lexical';
 import { LexicalComposer } from '@lexical/react/LexicalComposer';
 import { ContentEditable } from '@lexical/react/LexicalContentEditable';
 import { HistoryPlugin } from '@lexical/react/LexicalHistoryPlugin';
 import { OnChangePlugin } from '@lexical/react/LexicalOnChangePlugin';
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext';
 import { LexicalErrorBoundary } from '@lexical/react/LexicalErrorBoundary';
-import { $createHeadingNode, $isHeadingNode, HeadingNode } from '@lexical/rich-text';
+import { 
+  $createHeadingNode, 
+  $createQuoteNode, 
+  $isHeadingNode, 
+  $isQuoteNode, 
+  HeadingNode, 
+  QuoteNode
+} from '@lexical/rich-text';
+import type { HeadingTagType } from '@lexical/rich-text';
+import { 
+  $isListNode, 
+  $isListItemNode, 
+  ListNode, 
+  ListItemNode,
+  INSERT_ORDERED_LIST_COMMAND,
+  INSERT_UNORDERED_LIST_COMMAND,
+  REMOVE_LIST_COMMAND
+} from '@lexical/list';
 import { RichTextPlugin } from '@lexical/react/LexicalRichTextPlugin';
+import { ListPlugin } from '@lexical/react/LexicalListPlugin';
+import { 
+  $getSelectionStyleValueForProperty,
+  $patchStyleText
+} from '@lexical/selection';
+import { mergeRegister } from '@lexical/utils';
 import type { EditorState, LexicalEditor as LexicalEditorType } from 'lexical';
+
+// Font options
+const FONT_FAMILY_OPTIONS: [string, string][] = [
+  ['Arial', 'Arial'],
+  ['Courier New', 'Courier New, monospace'],
+  ['Georgia', 'Georgia, serif'],
+  ['Times New Roman', 'Times New Roman, serif'],
+  ['Trebuchet MS', 'Trebuchet MS, sans-serif'],
+  ['Verdana', 'Verdana, sans-serif'],
+];
+
+const FONT_SIZE_OPTIONS: [string, string][] = [
+  ['10px', '10px'],
+  ['11px', '11px'],
+  ['12px', '12px'],
+  ['13px', '13px'],
+  ['14px', '14px'],
+  ['15px', '15px'],
+  ['16px', '16px'],
+  ['17px', '17px'],
+  ['18px', '18px'],
+  ['19px', '19px'],
+  ['20px', '20px'],
+];
 
 // Custom theme for styling
 const theme = {
   text: {
     bold: 'font-bold',
     italic: 'italic',
+    underline: 'underline',
+    strikethrough: 'line-through',
+    code: 'bg-gray-100 px-1 py-0.5 rounded text-sm font-mono',
   },
   paragraph: 'mb-2',
   heading: {
     h1: 'text-3xl font-bold mb-4 mt-6',
     h2: 'text-2xl font-bold mb-3 mt-5',
     h3: 'text-xl font-bold mb-2 mt-4',
+    h4: 'text-lg font-bold mb-2 mt-3',
+    h5: 'text-base font-bold mb-1 mt-2',
+    h6: 'text-sm font-bold mb-1 mt-2',
+  },
+  quote: 'border-l-4 border-gray-300 pl-4 italic text-gray-700 mb-4',
+  list: {
+    nested: {
+      listitem: 'list-none',
+    },
+    ol: 'list-decimal list-inside mb-2',
+    ul: 'list-disc list-inside mb-2',
+    listitem: 'mb-1',
   },
 };
 
-// Plugin to handle toolbar actions
-function ToolbarPlugin() {
-  const [editor] = useLexicalComposerContext();
-
-  const formatHeading = (level: 1 | 2 | 3) => {
-    editor.update(() => {
-      const selection = $getSelection();
-      if ($isRangeSelection(selection)) {
-        const headingNode = $createHeadingNode(`h${level}`);
-        selection.insertNodes([headingNode]);
-      }
-    });
-  };
-
-  const formatParagraph = () => {
-    editor.update(() => {
-      const selection = $getSelection();
-      if ($isRangeSelection(selection)) {
-        const paragraphNode = $createParagraphNode();
-        selection.insertNodes([paragraphNode]);
-      }
-    });
-  };
-
+// Toolbar button component
+function ToolbarButton({ 
+  onClick, 
+  disabled = false, 
+  active = false, 
+  children, 
+  title 
+}: {
+  onClick: () => void;
+  disabled?: boolean;
+  active?: boolean;
+  children: React.ReactNode;
+  title?: string;
+}) {
   return (
-    <div className="border-b border-gray-200 p-3 flex gap-2 bg-white">
-      <button
-        type="button"
-        onClick={() => formatHeading(1)}
-        className="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 text-sm"
-      >
-        H1
-      </button>
-      <button
-        type="button"
-        onClick={() => formatHeading(2)}
-        className="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 text-sm"
-      >
-        H2
-      </button>
-      <button
-        type="button"
-        onClick={() => formatHeading(3)}
-        className="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 text-sm"
-      >
-        H3
-      </button>
-      <button
-        type="button"
-        onClick={formatParagraph}
-        className="px-3 py-1 bg-gray-500 text-white rounded hover:bg-gray-600 text-sm"
-      >
-        Paragraph
-      </button>
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      title={title}
+      className={`
+        px-2 py-1 text-sm border border-gray-300 
+        ${active 
+          ? 'bg-blue-100 text-blue-700 border-blue-300' 
+          : 'bg-white text-gray-700 hover:bg-gray-50'
+        }
+        ${disabled 
+          ? 'opacity-50 cursor-not-allowed' 
+          : 'cursor-pointer'
+        }
+        first:rounded-l last:rounded-r border-r-0 last:border-r
+      `}
+    >
+      {children}
+    </button>
+  );
+}
+
+// Dropdown component
+function ToolbarDropdown({
+  value,
+  onChange,
+  options,
+  disabled = false
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  options: [string, string][];
+  disabled?: boolean;
+}) {
+  return (
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      disabled={disabled}
+      className="px-2 py-1 text-sm border border-gray-300 rounded bg-white text-gray-700 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+    >
+      {options.map(([option, text]) => (
+        <option key={option} value={option}>
+          {text}
+        </option>
+      ))}
+    </select>
+  );
+}
+
+// Color picker component
+function ColorPicker({
+  value,
+  onChange,
+  disabled = false
+}: {
+  value: string;
+  onChange: (color: string) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <div className="relative">
+      <input
+        type="color"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        disabled={disabled}
+        className="w-8 h-8 border border-gray-300 rounded cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+      />
     </div>
   );
 }
 
-// Plugin to handle variable highlighting
-function VariableHighlightPlugin() {
+// Main toolbar plugin
+function ToolbarPlugin() {
   const [editor] = useLexicalComposerContext();
+  const [activeEditor, setActiveEditor] = useState(editor);
+  const [blockType, setBlockType] = useState('paragraph');
+  const [fontSize, setFontSize] = useState('15px');
+  const [fontFamily, setFontFamily] = useState('Arial');
+  const [fontColor, setFontColor] = useState('#000000');
+  const [bgColor, setBgColor] = useState('#ffffff');
+  const [isBold, setIsBold] = useState(false);
+  const [isItalic, setIsItalic] = useState(false);
+  const [isUnderline, setIsUnderline] = useState(false);
+  const [isStrikethrough, setIsStrikethrough] = useState(false);
+  const [isCode, setIsCode] = useState(false);
+  const [canUndo, setCanUndo] = useState(false);
+  const [canRedo, setCanRedo] = useState(false);
+
+  const $updateToolbar = useCallback(() => {
+    const selection = $getSelection();
+    if ($isRangeSelection(selection)) {
+      const anchorNode = selection.anchor.getNode();
+      let element =
+        anchorNode.getKey() === 'root'
+          ? anchorNode
+          : $findMatchingParent(anchorNode, (e) => {
+              const parent = e.getParent();
+              return parent !== null && $isRootOrShadowRoot(parent);
+            });
+
+      if (element === null) {
+        element = anchorNode.getTopLevelElementOrThrow();
+      }
+
+      // Update text format
+      setIsBold(selection.hasFormat('bold'));
+      setIsItalic(selection.hasFormat('italic'));
+      setIsUnderline(selection.hasFormat('underline'));
+      setIsStrikethrough(selection.hasFormat('strikethrough'));
+      setIsCode(selection.hasFormat('code'));
+
+      // Update block type
+      if ($isListNode(element)) {
+        const parentList = $getNearestNodeOfType(anchorNode, ListNode);
+        const type = parentList ? parentList.getListType() : element.getListType();
+        setBlockType(type);
+      } else {
+        const type = $isHeadingNode(element) ? element.getTag() : element.getType();
+        setBlockType(type);
+      }
+
+      // Update font family
+      setFontFamily(
+        $getSelectionStyleValueForProperty(selection, 'font-family', 'Arial'),
+      );
+
+      // Update font size
+      setFontSize(
+        $getSelectionStyleValueForProperty(selection, 'font-size', '15px'),
+      );
+
+      // Update font color
+      setFontColor(
+        $getSelectionStyleValueForProperty(selection, 'color', '#000000'),
+      );
+
+      // Update background color
+      setBgColor(
+        $getSelectionStyleValueForProperty(selection, 'background-color', '#ffffff'),
+      );
+    }
+  }, [activeEditor]);
 
   useEffect(() => {
-    return editor.registerTextContentListener((textContent) => {
+    return editor.registerCommand(
+      SELECTION_CHANGE_COMMAND,
+      (_payload, newEditor) => {
+        $updateToolbar();
+        setActiveEditor(newEditor);
+        return false;
+      },
+      1,
+    );
+  }, [editor, $updateToolbar]);
+
+  useEffect(() => {
+    return mergeRegister(
+      activeEditor.registerUpdateListener(({editorState}) => {
+        editorState.read(() => {
+          $updateToolbar();
+        });
+      }),
+      activeEditor.registerCommand(
+        CAN_UNDO_COMMAND,
+        (payload) => {
+          setCanUndo(payload);
+          return false;
+        },
+        1,
+      ),
+      activeEditor.registerCommand(
+        CAN_REDO_COMMAND,
+        (payload) => {
+          setCanRedo(payload);
+          return false;
+        },
+        1,
+      ),
+    );
+  }, [$updateToolbar, activeEditor]);
+
+  const formatParagraph = () => {
+    if (blockType !== 'paragraph') {
       editor.update(() => {
-        const root = $getRoot();
-        
-        // Simple regex to find {{variable}} patterns
-        const variableRegex = /\{\{([^}]+)\}\}/g;
-        
-        // This is a simplified approach - in a real implementation,
-        // you'd want to create custom nodes for variables
-        // For now, we'll just style them with CSS
+        const selection = $getSelection();
+        if ($isRangeSelection(selection)) {
+          $setBlocksType(selection, () => $createParagraphNode());
+        }
       });
-    });
-  }, [editor]);
+    }
+  };
+
+  const formatHeading = (headingSize: HeadingTagType) => {
+    if (blockType !== headingSize) {
+      editor.update(() => {
+        const selection = $getSelection();
+        if ($isRangeSelection(selection)) {
+          $setBlocksType(selection, () => $createHeadingNode(headingSize));
+        }
+      });
+    }
+  };
+
+  const formatBulletList = () => {
+    if (blockType !== 'bullet') {
+      editor.dispatchCommand(INSERT_UNORDERED_LIST_COMMAND, undefined);
+    } else {
+      editor.dispatchCommand(REMOVE_LIST_COMMAND, undefined);
+    }
+  };
+
+  const formatNumberedList = () => {
+    if (blockType !== 'number') {
+      editor.dispatchCommand(INSERT_ORDERED_LIST_COMMAND, undefined);
+    } else {
+      editor.dispatchCommand(REMOVE_LIST_COMMAND, undefined);
+    }
+  };
+
+  const formatQuote = () => {
+    if (blockType !== 'quote') {
+      editor.update(() => {
+        const selection = $getSelection();
+        if ($isRangeSelection(selection)) {
+          $setBlocksType(selection, () => $createQuoteNode());
+        }
+      });
+    }
+  };
+
+  const applyStyleText = useCallback(
+    (styles: Record<string, string>) => {
+      activeEditor.update(() => {
+        const selection = $getSelection();
+        if ($isRangeSelection(selection)) {
+          $patchStyleText(selection, styles);
+        }
+      });
+    },
+    [activeEditor],
+  );
+
+  const onFontColorSelect = useCallback(
+    (value: string) => {
+      applyStyleText({color: value});
+    },
+    [applyStyleText],
+  );
+
+  const onBgColorSelect = useCallback(
+    (value: string) => {
+      applyStyleText({'background-color': value});
+    },
+    [applyStyleText],
+  );
+
+  const onFontFamilySelect = useCallback(
+    (value: string) => {
+      applyStyleText({'font-family': value});
+    },
+    [applyStyleText],
+  );
+
+  const onFontSizeSelect = useCallback(
+    (value: string) => {
+      applyStyleText({'font-size': value});
+    },
+    [applyStyleText],
+  );
+
+  return (
+    <div className="flex flex-wrap items-center gap-2 p-3 bg-white border-b border-gray-200">
+      {/* Undo/Redo */}
+      <div className="flex">
+        <ToolbarButton
+          disabled={!canUndo}
+          onClick={() => activeEditor.dispatchCommand(UNDO_COMMAND, undefined)}
+          title="Undo (Ctrl+Z)"
+        >
+          ↶
+        </ToolbarButton>
+        <ToolbarButton
+          disabled={!canRedo}
+          onClick={() => activeEditor.dispatchCommand(REDO_COMMAND, undefined)}
+          title="Redo (Ctrl+Y)"
+        >
+          ↷
+        </ToolbarButton>
+      </div>
+
+      <div className="w-px h-6 bg-gray-300" />
+
+      {/* Block Type */}
+      <ToolbarDropdown
+        value={blockType}
+        onChange={(value) => {
+          if (value === 'paragraph') formatParagraph();
+          else if (value === 'h1') formatHeading('h1');
+          else if (value === 'h2') formatHeading('h2');
+          else if (value === 'h3') formatHeading('h3');
+          else if (value === 'h4') formatHeading('h4');
+          else if (value === 'h5') formatHeading('h5');
+          else if (value === 'h6') formatHeading('h6');
+          else if (value === 'quote') formatQuote();
+        }}
+        options={[
+          ['paragraph', 'Normal'],
+          ['h1', 'Heading 1'],
+          ['h2', 'Heading 2'],
+          ['h3', 'Heading 3'],
+          ['h4', 'Heading 4'],
+          ['h5', 'Heading 5'],
+          ['h6', 'Heading 6'],
+          ['quote', 'Quote'],
+        ]}
+      />
+
+      <div className="w-px h-6 bg-gray-300" />
+
+      {/* Font Family */}
+      <ToolbarDropdown
+        value={fontFamily}
+        onChange={onFontFamilySelect}
+        options={FONT_FAMILY_OPTIONS}
+      />
+
+      {/* Font Size */}
+      <ToolbarDropdown
+        value={fontSize}
+        onChange={onFontSizeSelect}
+        options={FONT_SIZE_OPTIONS}
+      />
+
+      <div className="w-px h-6 bg-gray-300" />
+
+      {/* Text Formatting */}
+      <div className="flex">
+        <ToolbarButton
+          onClick={() => activeEditor.dispatchCommand(FORMAT_TEXT_COMMAND, 'bold')}
+          active={isBold}
+          title="Bold (Ctrl+B)"
+        >
+          <strong>B</strong>
+        </ToolbarButton>
+        <ToolbarButton
+          onClick={() => activeEditor.dispatchCommand(FORMAT_TEXT_COMMAND, 'italic')}
+          active={isItalic}
+          title="Italic (Ctrl+I)"
+        >
+          <em>I</em>
+        </ToolbarButton>
+        <ToolbarButton
+          onClick={() => activeEditor.dispatchCommand(FORMAT_TEXT_COMMAND, 'underline')}
+          active={isUnderline}
+          title="Underline (Ctrl+U)"
+        >
+          <u>U</u>
+        </ToolbarButton>
+        <ToolbarButton
+          onClick={() => activeEditor.dispatchCommand(FORMAT_TEXT_COMMAND, 'strikethrough')}
+          active={isStrikethrough}
+          title="Strikethrough"
+        >
+          <s>S</s>
+        </ToolbarButton>
+        <ToolbarButton
+          onClick={() => activeEditor.dispatchCommand(FORMAT_TEXT_COMMAND, 'code')}
+          active={isCode}
+          title="Code"
+        >
+          {'<>'}
+        </ToolbarButton>
+      </div>
+
+      <div className="w-px h-6 bg-gray-300" />
+
+      {/* Colors */}
+      <div className="flex items-center gap-1">
+        <span className="text-sm text-gray-600">A</span>
+        <ColorPicker value={fontColor} onChange={onFontColorSelect} />
+        <span className="text-sm text-gray-600">⬛</span>
+        <ColorPicker value={bgColor} onChange={onBgColorSelect} />
+      </div>
+
+      <div className="w-px h-6 bg-gray-300" />
+
+      {/* Alignment */}
+      <div className="flex">
+        <ToolbarButton
+          onClick={() => activeEditor.dispatchCommand(FORMAT_ELEMENT_COMMAND, 'left')}
+          title="Align Left"
+        >
+          ≡
+        </ToolbarButton>
+        <ToolbarButton
+          onClick={() => activeEditor.dispatchCommand(FORMAT_ELEMENT_COMMAND, 'center')}
+          title="Align Center"
+        >
+          ≈
+        </ToolbarButton>
+        <ToolbarButton
+          onClick={() => activeEditor.dispatchCommand(FORMAT_ELEMENT_COMMAND, 'right')}
+          title="Align Right"
+        >
+          ≣
+        </ToolbarButton>
+        <ToolbarButton
+          onClick={() => activeEditor.dispatchCommand(FORMAT_ELEMENT_COMMAND, 'justify')}
+          title="Justify"
+        >
+          ≡
+        </ToolbarButton>
+      </div>
+
+      <div className="w-px h-6 bg-gray-300" />
+
+      {/* Lists */}
+      <div className="flex">
+        <ToolbarButton
+          onClick={formatBulletList}
+          active={blockType === 'bullet'}
+          title="Bullet List"
+        >
+          •
+        </ToolbarButton>
+        <ToolbarButton
+          onClick={formatNumberedList}
+          active={blockType === 'number'}
+          title="Numbered List"
+        >
+          1.
+        </ToolbarButton>
+      </div>
+
+      <div className="w-px h-6 bg-gray-300" />
+
+      {/* Indent */}
+      <div className="flex">
+        <ToolbarButton
+          onClick={() => activeEditor.dispatchCommand(OUTDENT_CONTENT_COMMAND, undefined)}
+          title="Outdent"
+        >
+          ⇤
+        </ToolbarButton>
+        <ToolbarButton
+          onClick={() => activeEditor.dispatchCommand(INDENT_CONTENT_COMMAND, undefined)}
+          title="Indent"
+        >
+          ⇥
+        </ToolbarButton>
+      </div>
+    </div>
+  );
+}
+
+// Helper functions
+function $findMatchingParent(
+  node: any,
+  findFn: (node: any) => boolean,
+): any | null {
+  let curr = node;
+
+  while (curr !== null && curr.getParent() !== null && !findFn(curr)) {
+    curr = curr.getParent();
+  }
+
+  return findFn(curr) ? curr : null;
+}
+
+function $isRootOrShadowRoot(node: any): boolean {
+  return node.getKey() === 'root' || node.constructor.name === 'ShadowRoot';
+}
+
+function $getNearestNodeOfType(
+  node: any,
+  klass: any,
+): any | null {
+  let parent = node;
+
+  while (parent != null) {
+    if (parent instanceof klass) {
+      return parent;
+    }
+
+    parent = parent.getParent();
+  }
 
   return null;
 }
 
+function $setBlocksType(selection: any, createElement: () => any): void {
+  const nodes = selection.getNodes();
+
+  if (nodes.length === 0) {
+    return;
+  }
+
+  const firstNode = nodes[0];
+  const topLevelElement = firstNode.getTopLevelElement();
+
+  if (topLevelElement === null) {
+    return;
+  }
+
+  const newElement = createElement();
+  topLevelElement.replace(newElement, true);
+}
+
 // Function to convert Lexical editor state to our custom format
 function convertEditorStateToCustomFormat(editorState: EditorState) {
+  interface TextNode {
+    type: string;
+    text: string;
+    format?: number;
+    style?: string;
+  }
+
   interface ChildNode {
     type: string;
     level?: number;
-    children: Array<{ type: string; text: string }>;
+    listType?: string;
+    children: Array<TextNode>;
   }
   
   const lexicalJson = { root: { children: [] as ChildNode[] } };
   const contextMap: Record<string, string> = {};
   const promptMap: Record<string, string> = {};
+
+  // Helper function to extract text nodes with their formatting
+  const extractTextNodes = (node: any): TextNode[] => {
+    const textNodes: TextNode[] = [];
+    const children = node.getChildren();
+    
+    for (const child of children) {
+      if (child.getType() === 'text') {
+        const textNode: TextNode = {
+          type: 'text',
+          text: child.getTextContent()
+        };
+        
+        // Add format information if present
+        const format = child.getFormat();
+        if (format > 0) {
+          textNode.format = format;
+        }
+        
+        // Add style information if present
+        const style = child.getStyle();
+        if (style) {
+          textNode.style = style;
+        }
+        
+        textNodes.push(textNode);
+      } else {
+        // For nested elements, recursively extract text nodes
+        textNodes.push(...extractTextNodes(child));
+      }
+    }
+    
+    return textNodes;
+  };
 
   editorState.read(() => {
     const root = $getRoot();
@@ -123,22 +687,58 @@ function convertEditorStateToCustomFormat(editorState: EditorState) {
     for (const node of children) {
       if ($isHeadingNode(node)) {
         const textContent = node.getTextContent();
-        const level = parseInt(node.getTag().replace('h', ''), 10);
+        const level = Number.parseInt(node.getTag().replace('h', ''), 10);
+        const textNodes = extractTextNodes(node);
         
         lexicalJson.root.children.push({
           type: 'heading',
           level: level,
-          children: [{ type: 'text', text: textContent }]
+          children: textNodes.length > 0 ? textNodes : [{ type: 'text', text: textContent }]
         });
 
         // Extract variables from text content
         extractVariables(textContent, contextMap, promptMap);
+      } else if ($isQuoteNode(node)) {
+        const textContent = node.getTextContent();
+        const textNodes = extractTextNodes(node);
+        
+        lexicalJson.root.children.push({
+          type: 'quote',
+          children: textNodes.length > 0 ? textNodes : [{ type: 'text', text: textContent }]
+        });
+
+        // Extract variables from text content
+        extractVariables(textContent, contextMap, promptMap);
+      } else if ($isListNode(node)) {
+        const listType = node.getListType();
+        const items: TextNode[][] = [];
+        
+        // Get all list items with their formatting
+        const listChildren = node.getChildren();
+        for (const listChild of listChildren) {
+          if ($isListItemNode(listChild)) {
+            const itemText = listChild.getTextContent();
+            const textNodes = extractTextNodes(listChild);
+            items.push(textNodes.length > 0 ? textNodes : [{ type: 'text', text: itemText }]);
+            extractVariables(itemText, contextMap, promptMap);
+          }
+        }
+        
+        lexicalJson.root.children.push({
+          type: 'list',
+          listType: listType,
+          children: items.flat().map((textNode, index) => ({
+            ...textNode,
+            type: index === 0 || items[Math.floor(index / items.length)] ? 'listitem' : 'text'
+          }))
+        });
       } else if (node.getType() === 'paragraph') {
         const textContent = node.getTextContent();
+        const textNodes = extractTextNodes(node);
         
         lexicalJson.root.children.push({
           type: 'paragraph',
-          children: [{ type: 'text', text: textContent }]
+          children: textNodes.length > 0 ? textNodes : [{ type: 'text', text: textContent }]
         });
 
         // Extract variables from text content
@@ -158,20 +758,26 @@ function extractVariables(text: string, contextMap: Record<string, string>, prom
   // Extract {{variable}} patterns
   const variableRegex = /\{\{([^}]+)\}\}/g;
   let match: RegExpExecArray | null;
-  while ((match = variableRegex.exec(text)) !== null) {
+  
+  // Fix linter error by separating assignment from condition
+  match = variableRegex.exec(text);
+  while (match !== null) {
     const varName = match[1];
     if (!contextMap[varName]) {
       contextMap[varName] = `[${varName}]`; // placeholder value
     }
+    match = variableRegex.exec(text);
   }
 
   // Extract [[prompt]] patterns  
   const promptRegex = /\[\[([^\]]+)\]\]/g;
-  while ((match = promptRegex.exec(text)) !== null) {
+  match = promptRegex.exec(text);
+  while (match !== null) {
     const promptName = match[1];
     if (!promptMap[promptName]) {
       promptMap[promptName] = `[${promptName} description]`; // placeholder value
     }
+    match = promptRegex.exec(text);
   }
 }
 
@@ -181,7 +787,13 @@ interface JsonOutput {
       children: Array<{
         type: string;
         level?: number;
-        children: Array<{ type: string; text: string }>;
+        listType?: string;
+        children: Array<{
+          type: string;
+          text: string;
+          format?: number;
+          style?: string;
+        }>;
       }>;
     };
   };
@@ -198,13 +810,13 @@ export function LexicalEditor() {
   const initialConfig = {
     namespace: 'WordAIEditor',
     theme,
-    nodes: [HeadingNode],
+    nodes: [HeadingNode, QuoteNode, ListNode, ListItemNode],
     onError: (error: Error) => {
       console.error('Lexical error:', error);
     },
   };
 
-  const onChange = (editorState: EditorState, editor: LexicalEditorType) => {
+  const onChange = (editorState: EditorState) => {
     const customFormat = convertEditorStateToCustomFormat(editorState);
     setJsonOutput(customFormat);
   };
@@ -254,24 +866,24 @@ export function LexicalEditor() {
             <RichTextPlugin
               contentEditable={
                 <ContentEditable 
-                  className="min-h-[400px] p-4 outline-none resize-none overflow-hidden"
+                  className="min-h-[400px] max-h-[600px] p-4 outline-none resize-none overflow-y-auto"
                   style={{
                     // Custom CSS for variable highlighting
-                    fontSize: '14px',
+                    fontSize: '15px',
                     lineHeight: '1.5',
                   }}
                 />
               }
               placeholder={
                 <div className="absolute top-4 left-4 text-gray-400 pointer-events-none">
-                  Start typing your template... Use {`{{variable}}`} for variables and {`[[prompt]]`} for AI prompts.
+                  Start typing your template... Use {"{{variable}}"} for variables and {"[[prompt]]"} for AI prompts.
                 </div>
               }
               ErrorBoundary={LexicalErrorBoundary}
             />
             <OnChangePlugin onChange={onChange} />
             <HistoryPlugin />
-            <VariableHighlightPlugin />
+            <ListPlugin />
           </div>
         </LexicalComposer>
       </div>
@@ -302,7 +914,7 @@ export function LexicalEditor() {
           >
             {isSaving ? (
               <>
-                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                 Saving...
               </>
             ) : (
