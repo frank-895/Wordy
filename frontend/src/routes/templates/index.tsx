@@ -44,6 +44,35 @@ function TemplatesList() {
     }
   };
 
+  const deleteTemplate = async (templateId: string, templateName: string) => {
+    // Show confirmation dialog
+    const confirmed = window.confirm(`Are you sure you want to delete the template "${templateName}"? This action cannot be undone.`);
+    
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/template/${templateId}/delete/`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      // Remove the template from the state
+      setTemplates(prevTemplates => 
+        prevTemplates.filter(template => template.id !== templateId)
+      );
+
+      // You could also show a success message here
+      alert(`Template "${templateName}" has been deleted successfully.`);
+    } catch (err) {
+      alert(`Failed to delete template: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    }
+  };
+
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
       year: 'numeric',
@@ -97,7 +126,7 @@ function TemplatesList() {
       {templates.length === 0 ? (
         <div className="bg-white rounded-lg shadow-md p-8 text-center">
           <div className="text-gray-400 mb-4">
-            <svg className="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-label="Document icon">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
             </svg>
           </div>
@@ -159,6 +188,13 @@ function TemplatesList() {
                     >
                       Fill Template
                     </Link>
+                    <button
+                      type="button"
+                      onClick={() => deleteTemplate(template.id, template.name)}
+                      className="text-red-600 hover:text-red-800 text-sm font-medium px-3 py-1 border border-red-600 rounded hover:bg-red-50 transition-colors"
+                    >
+                      Delete
+                    </button>
                   </div>
                 </div>
               </div>
