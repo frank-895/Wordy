@@ -1,10 +1,21 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useEffect, useState, useCallback } from 'react'
 import { ContextManager } from '../../components/ContextManager'
+import { SessionProvider, useSession } from '../../contexts/SessionContext'
 
 export const Route = createFileRoute('/templates/$templateId')({
-  component: TemplateForm,
+  component: TemplateFormWrapper,
 })
+
+function TemplateFormWrapper() {
+  const { templateId } = Route.useParams()
+  
+  return (
+    <SessionProvider templateId={templateId}>
+      <TemplateForm />
+    </SessionProvider>
+  )
+}
 
 interface FormFields {
   placeholders: string[];
@@ -13,21 +24,20 @@ interface FormFields {
 function TemplateForm() {
   const { templateId } = Route.useParams()
   const navigate = useNavigate()
+  const { sessionId, cleanup } = useSession()
   const [formFields, setFormFields] = useState<FormFields | null>(null)
   const [loading, setLoading] = useState<boolean>(true)
   const [error, setError] = useState<string>('')
   const [generating, setGenerating] = useState<boolean>(false)
   const [generateMessage, setGenerateMessage] = useState<string>('')
-  const [sessionId, setSessionId] = useState<string>('')
   
   // Form state for user inputs
   const [contextMap, setContextMap] = useState<Record<string, string>>({})
 
-  // Generate a session ID when component mounts
+  // Debug logging
   useEffect(() => {
-    const newSessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-    setSessionId(newSessionId)
-  }, [])
+    console.log(`TemplateForm: sessionId = ${sessionId}`)
+  }, [sessionId])
 
   const fetchFormFields = useCallback(async () => {
     try {
@@ -117,6 +127,11 @@ function TemplateForm() {
       document.body.removeChild(a)
 
       setGenerateMessage('Document generated and downloaded successfully!')
+      
+      // Cleanup collateral material after successful generation
+      console.log('Document generated successfully, calling cleanup...')
+      await cleanup()
+      console.log('Cleanup completed')
       
     } catch (err) {
       setGenerateMessage(`Error generating document: ${err instanceof Error ? err.message : 'Unknown error'}`)
@@ -232,8 +247,6 @@ function TemplateForm() {
               </div>
             </div>
           )}
-
-
 
           {/* Context Management Section */}
           <div className="bg-white rounded-lg shadow-md p-6">

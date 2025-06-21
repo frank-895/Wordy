@@ -142,13 +142,21 @@ def cleanup_session(request, session_id):
         return HttpResponseNotAllowed(['DELETE'])
 
     try:
+        print(f"🔧 CLEANUP: Attempting to cleanup session: {session_id}")
         documents = Document.objects.filter(session_id=session_id)
         count = documents.count()
-        documents.delete()  # This will cascade delete chunks
+        print(f"🔧 CLEANUP: Found {count} documents for session {session_id}")
+        
+        if count > 0:
+            documents.delete()  # This will cascade delete chunks
+            print(f"🔧 CLEANUP: Successfully deleted {count} documents for session {session_id}")
+        else:
+            print(f"🔧 CLEANUP: No documents found for session {session_id}")
         
         return JsonResponse({
             'message': f'Deleted {count} context documents for session {session_id}',
             'deleted_count': count
         })
     except Exception as e:
+        print(f"🔧 CLEANUP: Error cleaning up session {session_id}: {str(e)}")
         return JsonResponse({'error': f"Failed to cleanup session: {str(e)}"}, status=500)

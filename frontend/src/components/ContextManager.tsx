@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { ContextUpload } from './ContextUpload'
 
 interface ContextDocument {
@@ -20,30 +20,50 @@ export function ContextManager({ templateId, sessionId }: ContextManagerProps) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string>('')
 
+  // Debug logging
+  useEffect(() => {
+    console.log(`ContextManager: Received templateId=${templateId}, sessionId=${sessionId}`)
+  }, [templateId, sessionId])
+
   // Fetch context documents for this template
   const fetchContextDocuments = useCallback(async () => {
     try {
-      const response = await fetch(`/api/rag/list/?template_id=${templateId}`)
+      const params = new URLSearchParams({ template_id: templateId })
+      if (sessionId) {
+        params.append('session_id', sessionId)
+      }
+      
+      console.log(`ContextManager: Fetching documents with params: ${params.toString()}`)
+      const response = await fetch(`/api/rag/list/?${params.toString()}`)
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`)
       }
       const data = await response.json()
+      console.log(`ContextManager: Received ${data.documents?.length || 0} documents`)
       setContextDocuments(data.documents || [])
     } catch (err) {
       setError(`Failed to fetch context documents: ${err instanceof Error ? err.message : 'Unknown error'}`)
     }
-  }, [templateId])
+  }, [templateId, sessionId])
 
   // Load data on component mount
   useEffect(() => {
     const loadData = async () => {
       setLoading(true)
       setError('')
+      
+      // Wait for sessionId to be available
+      if (!sessionId) {
+        console.log('ContextManager: Waiting for sessionId...')
+        setLoading(false)
+        return
+      }
+      
       await fetchContextDocuments()
       setLoading(false)
     }
     loadData()
-  }, [fetchContextDocuments])
+  }, [fetchContextDocuments, sessionId])
 
   // Handle upload success
   const handleUploadSuccess = useCallback(() => {
