@@ -28,7 +28,7 @@ function TemplateForm() {
       setLoading(true)
       setError('')
       
-      const response = await fetch(`http://localhost:8000/api/template/${templateId}/fields/`)
+      const response = await fetch(`/api/template/${templateId}/fields/`)
       
       if (!response.ok) {
         if (response.status === 404) {
@@ -44,13 +44,13 @@ function TemplateForm() {
       const initialContext: Record<string, string> = {}
       const initialPrompts: Record<string, string> = {}
       
-      data.placeholders.forEach(placeholder => {
+      for (const placeholder of data.placeholders) {
         initialContext[placeholder] = ''
-      })
+      }
       
-      data.prompts.forEach(prompt => {
+      for (const prompt of data.prompts) {
         initialPrompts[prompt] = ''
-      })
+      }
       
       setContextMap(initialContext)
       setPromptMap(initialPrompts)
@@ -94,13 +94,13 @@ function TemplateForm() {
     setGenerateMessage('')
 
     try {
-      const response = await fetch('http://localhost:8000/api/generate_doc/', {
+      const response = await fetch('/api/template/generate_doc/', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          template_id: Number.parseInt(templateId),
+          template_id: templateId,
           context_map: contextMap,
           prompt_map: promptMap,
         }),
@@ -198,7 +198,7 @@ function TemplateForm() {
       {!hasFields ? (
         <div className="bg-white rounded-lg shadow-md p-8 text-center">
           <div className="text-gray-400 mb-4">
-            <svg className="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-label="Document icon">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
             </svg>
           </div>

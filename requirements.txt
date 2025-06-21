@@ -29,7 +29,6 @@ openai==1.88.0
 opik==1.7.36
 orjson==3.10.18
 packaging==24.2
-psycopg2-binary==2.9.9
 pydantic==2.11.7
 pydantic_core==2.33.2
 PyMuPDF==1.26.1

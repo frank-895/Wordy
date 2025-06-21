@@ -6,7 +6,7 @@ export const Route = createFileRoute('/templates/')({
 })
 
 interface Template {
-  id: number;
+  id: string;
   name: string;
   created_at: string;
 }
@@ -29,7 +29,7 @@ function TemplatesList() {
       setLoading(true);
       setError('');
       
-      const response = await fetch('http://localhost:8000/api/template/');
+      const response = await fetch('/api/template/');
       
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
@@ -147,7 +147,7 @@ function TemplatesList() {
                     </span>
                     <Link 
                       to="/templates/$templateId" 
-                      params={{ templateId: template.id.toString() }}
+                      params={{ templateId: template.id }}
                       className="text-blue-600 hover:text-blue-800 text-sm font-medium px-3 py-1 border border-blue-600 rounded hover:bg-blue-50 transition-colors"
                     >
                       Fill Template
