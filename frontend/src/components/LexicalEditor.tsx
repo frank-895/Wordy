@@ -14,6 +14,20 @@ import {
   CAN_REDO_COMMAND,
   CAN_UNDO_COMMAND,
   SELECTION_CHANGE_COMMAND,
+  $createRangeSelection,
+  $setSelection,
+  $insertNodes,
+  $getNodeByKey,
+  $isTextNode,
+  COMMAND_PRIORITY_EDITOR,
+  TextNode,
+} from 'lexical';
+import type { 
+  ElementNode,
+  NodeKey,
+  LexicalNode,
+  EditorConfig,
+  SerializedTextNode,
 } from 'lexical';
 import { 
   AlignLeft, 
@@ -30,7 +44,12 @@ import {
   ListOrdered,
   Indent,
   Outdent,
-  Quote
+  Quote,
+  AtSign,
+  Edit3,
+  X,
+  Save,
+  Settings
 } from 'lucide-react';
 import { LexicalComposer } from '@lexical/react/LexicalComposer';
 import { ContentEditable } from '@lexical/react/LexicalContentEditable';
@@ -64,6 +83,144 @@ import {
 } from '@lexical/selection';
 import { mergeRegister } from '@lexical/utils';
 import type { EditorState, LexicalEditor as LexicalEditorType } from 'lexical';
+
+// Variable Definition Interface
+interface VariableDefinition {
+  id: string;
+  name: string;
+  type: 'variable' | 'prompt';
+  prompt?: string; // Only used for prompt type
+  defaultValue?: string;
+}
+
+// Custom Variable Node
+export class VariableNode extends TextNode {
+  __variableId: string;
+  __variableType: 'variable' | 'prompt';
+
+  static getType(): string {
+    return 'variable';
+  }
+
+  static clone(node: VariableNode): VariableNode {
+    return new VariableNode(node.__variableId, node.__variableType, node.__text, node.__key);
+  }
+
+  constructor(variableId: string, variableType: 'variable' | 'prompt', text: string, key?: NodeKey) {
+    super(text, key);
+    this.__variableId = variableId;
+    this.__variableType = variableType;
+  }
+
+  getVariableId(): string {
+    return this.__variableId;
+  }
+
+  getVariableType(): 'variable' | 'prompt' {
+    return this.__variableType;
+  }
+
+  setVariableId(variableId: string): void {
+    const writable = this.getWritable();
+    writable.__variableId = variableId;
+  }
+
+  setVariableType(variableType: 'variable' | 'prompt'): void {
+    const writable = this.getWritable();
+    writable.__variableType = variableType;
+  }
+
+  createDOM(config: EditorConfig): HTMLElement {
+    const element = super.createDOM(config);
+    
+    // Different styling based on variable type
+    if (this.__variableType === 'prompt') {
+      // AI Prompt variables - purple/violet theme
+      element.style.backgroundColor = '#ede9fe';
+      element.style.border = '1px solid #a78bfa';
+      element.style.color = '#7c3aed';
+    } else {
+      // Regular variables - blue theme  
+      element.style.backgroundColor = '#dbeafe';
+      element.style.border = '1px solid #93c5fd';
+      element.style.color = '#1d4ed8';
+    }
+    
+    element.style.padding = '1px 3px';
+    element.style.borderRadius = '3px';
+    element.style.cursor = 'text';
+    element.style.textDecoration = 'none';
+    element.style.display = 'inline';
+    element.setAttribute('data-variable-id', this.__variableId);
+    element.setAttribute('data-variable-type', this.__variableType);
+    element.title = `${this.__variableType === 'prompt' ? 'AI Prompt' : 'Variable'}: ${this.__variableId}`;
+    element.setAttribute('contenteditable', 'true');
+    return element;
+  }
+
+  updateDOM(prevNode: VariableNode, dom: HTMLElement, config: EditorConfig): boolean {
+    const updated = super.updateDOM(prevNode, dom, config);
+    dom.setAttribute('data-variable-id', this.__variableId);
+    dom.setAttribute('data-variable-type', this.__variableType);
+    dom.title = `${this.__variableType === 'prompt' ? 'AI Prompt' : 'Variable'}: ${this.__variableId}`;
+    return updated;
+  }
+
+  static importJSON(serializedNode: SerializedVariableNode): VariableNode {
+    const { variableId, variableType, text, format, style } = serializedNode;
+    const node = $createVariableNode(variableId, variableType || 'variable', text);
+    if (format) {
+      node.setFormat(format);
+    }
+    if (style) {
+      node.setStyle(style);
+    }
+    return node;
+  }
+
+  exportJSON(): SerializedVariableNode {
+    return {
+      ...super.exportJSON(),
+      variableId: this.__variableId,
+      variableType: this.__variableType,
+      type: 'variable',
+      version: 1,
+    };
+  }
+
+  // Allow this node to be selected and edited like regular text
+  isSelectable(): boolean {
+    return true;
+  }
+
+  isEditable(): boolean {
+    return true;
+  }
+
+  canBeEmpty(): boolean {
+    return false;
+  }
+
+  // Make sure it behaves like regular text for formatting
+  isTextEntity(): boolean {
+    return true;
+  }
+}
+
+export interface SerializedVariableNode extends SerializedTextNode {
+  variableId: string;
+  variableType: 'variable' | 'prompt';
+  type: 'variable';
+  version: 1;
+}
+
+export function $createVariableNode(variableId: string, variableType: 'variable' | 'prompt', text: string): VariableNode {
+  return new VariableNode(variableId, variableType, text);
+}
+
+export function $isVariableNode(node: LexicalNode | null | undefined): node is VariableNode {
+  return node instanceof VariableNode;
+}
 
 // Font options
 const FONT_FAMILY_OPTIONS: [string, string][] = [
@@ -117,6 +274,291 @@ const theme = {
     listitem: 'mb-1',
   },
 };
+
+// Variable Popup Component
+function VariablePopup({ 
+  isOpen, 
+  onClose, 
+  onSave, 
+  variable, 
+  position 
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  onSave: (variable: VariableDefinition) => void;
+  variable?: VariableDefinition;
+  position: { x: number; y: number };
+}) {
+  const [name, setName] = useState(variable?.name || '');
+  const [type, setType] = useState<'variable' | 'prompt'>(variable?.type || 'variable');
+  const [prompt, setPrompt] = useState(variable?.prompt || '');
+  const [defaultValue, setDefaultValue] = useState(variable?.defaultValue || '');
+
+  useEffect(() => {
+    if (variable) {
+      setName(variable.name);
+      setType(variable.type || 'variable');
+      setPrompt(variable.prompt || '');
+      setDefaultValue(variable.defaultValue || '');
+    } else {
+      setName('');
+      setType('variable');
+      setPrompt('');
+      setDefaultValue('');
+    }
+  }, [variable]);
+
+  const handleSave = () => {
+    if (!name.trim()) return;
+    if (type === 'prompt' && !prompt.trim()) return;
+    
+    onSave({
+      id: variable?.id || `var_${Date.now()}`,
+      name: name.trim(),
+      type: type,
+      prompt: type === 'prompt' ? prompt.trim() : undefined,
+      defaultValue: defaultValue.trim() || undefined,
+    });
+    onClose();
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div 
+      className="fixed bg-white border border-gray-300 rounded-lg shadow-lg p-4 z-50 w-80"
+      style={{ 
+        left: Math.min(position.x, window.innerWidth - 320), 
+        top: Math.min(position.y, window.innerHeight - 300) 
+      }}
+    >
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="font-semibold text-lg">
+          {variable ? 'Edit Variable' : 'Add Variable'}
+        </h3>
+        <button
+          type="button"
+          onClick={onClose}
+          className="text-gray-400 hover:text-gray-600"
+        >
+          <X className="w-4 h-4" />
+        </button>
+      </div>
+
+      <div className="space-y-3">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Variable Type *
+          </label>
+          <div className="flex gap-2">
+            <label className="flex items-center">
+              <input
+                type="radio"
+                name="variableType"
+                value="variable"
+                checked={type === 'variable'}
+                onChange={(e) => setType(e.target.value as 'variable' | 'prompt')}
+                className="mr-2"
+              />
+              <span className="text-sm">
+                <span className="font-medium text-blue-600">Regular Variable</span>
+                <br />
+                <span className="text-gray-500">Simple placeholder (e.g., {"{{name}}"})</span>
+              </span>
+            </label>
+            <label className="flex items-center">
+              <input
+                type="radio"
+                name="variableType"
+                value="prompt"
+                checked={type === 'prompt'}
+                onChange={(e) => setType(e.target.value as 'variable' | 'prompt')}
+                className="mr-2"
+              />
+              <span className="text-sm">
+                <span className="font-medium text-purple-600">AI Prompt</span>
+                <br />
+                <span className="text-gray-500">Generated by AI</span>
+              </span>
+            </label>
+          </div>
+        </div>
+
+        <div>
+          <label htmlFor="variable-name" className="block text-sm font-medium text-gray-700 mb-1">
+            Variable Name *
+          </label>
+          <input
+            id="variable-name"
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder={type === 'variable' ? "e.g., customer_name" : "e.g., greeting"}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+          />
+        </div>
+
+        {type === 'prompt' && (
+          <div>
+            <label htmlFor="variable-prompt" className="block text-sm font-medium text-gray-700 mb-1">
+              AI Prompt * <span className="text-gray-500">(can include variables)</span>
+            </label>
+            <textarea
+              id="variable-prompt"
+              value={prompt}
+              onChange={(e) => setPrompt(e.target.value)}
+              placeholder="e.g., Generate a personalized greeting for customer"
+              rows={3}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm"
+            />
+          </div>
+        )}
+
+        <div>
+          <label htmlFor="variable-default" className="block text-sm font-medium text-gray-700 mb-1">
+            Default Value (optional)
+          </label>
+          <input
+            id="variable-default"
+            type="text"
+            value={defaultValue}
+            onChange={(e) => setDefaultValue(e.target.value)}
+            placeholder={type === 'variable' ? "e.g., [Customer Name]" : "e.g., Hello there!"}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+          />
+        </div>
+      </div>
+
+      <div className="flex justify-end gap-2 mt-4">
+        <button
+          type="button"
+          onClick={onClose}
+          className="px-3 py-2 text-sm text-gray-600 hover:text-gray-800"
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          onClick={handleSave}
+          disabled={!name.trim()}
+          className="px-3 py-2 bg-blue-500 text-white text-sm rounded hover:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center gap-1"
+        >
+          <Save className="w-3 h-3" />
+          Save
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// Variables Sidebar Component
+function VariablesSidebar({ 
+  variables, 
+  onEditVariable, 
+  onDeleteVariable, 
+  isOpen, 
+  onToggle 
+}: {
+  variables: VariableDefinition[];
+  onEditVariable: (variable: VariableDefinition) => void;
+  onDeleteVariable: (variableId: string) => void;
+  isOpen: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <>
+      <button
+        type="button"
+        onClick={onToggle}
+        className="fixed right-4 top-4 bg-blue-500 text-white p-2 rounded-full shadow-lg hover:bg-blue-600 z-40"
+        title="Toggle Variables Panel"
+      >
+        <Settings className="w-5 h-5" />
+      </button>
+
+      {isOpen && (
+        <div className="fixed right-0 top-0 h-full w-80 bg-white border-l border-gray-300 shadow-lg z-30 overflow-y-auto">
+          <div className="p-4">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="font-semibold text-lg">Variables</h2>
+              <button
+                type="button"
+                onClick={onToggle}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {variables.length === 0 ? (
+              <p className="text-gray-500 text-sm">
+                No variables defined. Type @ in the editor to add variables.
+              </p>
+            ) : (
+              <div className="space-y-3">
+                {variables.map((variable) => (
+                  <div
+                    key={variable.id}
+                    className="border border-gray-200 rounded-lg p-3 hover:bg-gray-50"
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <div>
+                        <span className={`font-medium text-sm ${(variable.type || 'variable') === 'prompt' ? 'text-purple-600' : 'text-blue-600'}`}>
+                          {(variable.type || 'variable') === 'prompt' ? '[[' : '{{'}
+                          {variable.name}
+                          {(variable.type || 'variable') === 'prompt' ? ']]' : '}}'}
+                        </span>
+                        <span className="text-xs text-gray-500 ml-2">
+                          {(variable.type || 'variable') === 'prompt' ? 'AI Prompt' : 'Variable'}
+                        </span>
+                      </div>
+                      <div className="flex gap-1">
+                        <button
+                          type="button"
+                          onClick={() => onEditVariable(variable)}
+                          className="text-blue-500 hover:text-blue-700 p-1"
+                          title="Edit variable"
+                        >
+                          <Edit3 className="w-3 h-3" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => onDeleteVariable(variable.id)}
+                          className="text-red-500 hover:text-red-700 p-1"
+                          title="Delete variable"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </div>
+                    </div>
+                    
+                    {variable.prompt && (
+                      <div className="mb-2">
+                        <span className="text-xs text-gray-600 font-medium">Prompt:</span>
+                        <p className="text-xs text-gray-700 mt-1 bg-blue-50 p-2 rounded">
+                          {variable.prompt}
+                        </p>
+                      </div>
+                    )}
+                    
+                    {variable.defaultValue && (
+                      <div>
+                        <span className="text-xs text-gray-600 font-medium">Default:</span>
+                        <p className="text-xs text-gray-700 mt-1">
+                          {variable.defaultValue}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
 
 // Toolbar button component
 function ToolbarButton({ 
@@ -207,20 +649,89 @@ function ColorPicker({
   );
 }
 
-// Main toolbar plugin
-function ToolbarPlugin() {
+// Variable Insertion Plugin
+function VariableInsertionPlugin({ 
+  onInsertVariable,
+  variableToInsert,
+  onVariableInserted
+}: { 
+  onInsertVariable: (position: { x: number; y: number }) => void;
+  variableToInsert: VariableDefinition | null;
+  onVariableInserted: () => void;
+}) {
+  const [editor] = useLexicalComposerContext();
+
+  // Insert variable when variableToInsert changes
+  useEffect(() => {
+    if (variableToInsert) {
+      editor.update(() => {
+        const selection = $getSelection();
+        if ($isRangeSelection(selection)) {
+          const prefix = variableToInsert.type === 'prompt' ? '[[' : '{{';
+          const suffix = variableToInsert.type === 'prompt' ? ']]' : '}}';
+          const variableNode = $createVariableNode(
+            variableToInsert.id,
+            variableToInsert.type,
+            `${prefix}${variableToInsert.name}${suffix}`
+          );
+          selection.insertNodes([variableNode]);
+        }
+      });
+      onVariableInserted();
+    }
+  }, [editor, variableToInsert, onVariableInserted]);
+
+  useEffect(() => {
+    return editor.registerTextContentListener((textContent) => {
+      // Look for @ symbol to trigger variable insertion
+      const atIndex = textContent.lastIndexOf('@');
+      if (atIndex !== -1) {
+        const afterAt = textContent.slice(atIndex + 1);
+        // If there's an @ followed by word characters and then a space or end
+        if (afterAt.match(/^\w+(\s|$)/)) {
+          editor.update(() => {
+            const selection = $getSelection();
+            if ($isRangeSelection(selection)) {
+              const anchorNode = selection.anchor.getNode();
+              if ($isTextNode(anchorNode)) {
+                const textBefore = anchorNode.getTextContent().slice(0, selection.anchor.offset);
+                const lastAtIndex = textBefore.lastIndexOf('@');
+                if (lastAtIndex !== -1) {
+                  // Get cursor position for popup
+                  const rect = window.getSelection()?.getRangeAt(0).getBoundingClientRect();
+                  if (rect) {
+                    onInsertVariable({ x: rect.left, y: rect.bottom + 5 });
+                  }
+                }
+              }
+            }
+          });
+        }
+      }
+    });
+  }, [editor, onInsertVariable]);
+
+  return null;
+}
+
+// Toolbar plugin with variable insertion
+function ToolbarPlugin({ 
+  onInsertVariable 
+}: { 
+  onInsertVariable: (position: { x: number; y: number }) => void 
+}) {
   const [editor] = useLexicalComposerContext();
   const [activeEditor, setActiveEditor] = useState(editor);
   const [blockType, setBlockType] = useState('paragraph');
-  const [fontSize, setFontSize] = useState('15px');
-  const [fontFamily, setFontFamily] = useState('Arial');
-  const [fontColor, setFontColor] = useState('#000000');
-  const [bgColor, setBgColor] = useState('#ffffff');
+  const [selectedElementKey, setSelectedElementKey] = useState<NodeKey | null>(null);
+  const [fontSize, setFontSize] = useState<string>('15px');
+  const [fontColor, setFontColor] = useState<string>('#000');
+  const [bgColor, setBgColor] = useState<string>('#fff');
+  const [fontFamily, setFontFamily] = useState<string>('Arial');
   const [isBold, setIsBold] = useState(false);
   const [isItalic, setIsItalic] = useState(false);
   const [isUnderline, setIsUnderline] = useState(false);
   const [isStrikethrough, setIsStrikethrough] = useState(false);
-  const [isCode, setIsCode] = useState(false);
   const [canUndo, setCanUndo] = useState(false);
   const [canRedo, setCanRedo] = useState(false);
 
@@ -240,131 +751,129 @@ function ToolbarPlugin() {
         element = anchorNode.getTopLevelElementOrThrow();
       }
 
+      const elementKey = element.getKey();
+      const elementDOM = activeEditor.getElementByKey(elementKey);
+
       // Update text format
       setIsBold(selection.hasFormat('bold'));
       setIsItalic(selection.hasFormat('italic'));
       setIsUnderline(selection.hasFormat('underline'));
       setIsStrikethrough(selection.hasFormat('strikethrough'));
-      setIsCode(selection.hasFormat('code'));
 
       // Update block type
-      if ($isListNode(element)) {
-        const parentList = $getNearestNodeOfType(anchorNode, ListNode);
-        const type = parentList ? parentList.getListType() : element.getListType();
-        setBlockType(type);
-      } else {
-        const type = $isHeadingNode(element) ? element.getTag() : element.getType();
-        setBlockType(type);
+      if (elementDOM !== null) {
+        setSelectedElementKey(elementKey);
+        if ($isListNode(element)) {
+          const parentList = $getNearestNodeOfType(anchorNode, ListNode);
+          const type = parentList
+            ? parentList.getListType()
+            : element.getListType();
+          setBlockType(type);
+        } else {
+          const type = $isHeadingNode(element)
+            ? element.getTag()
+            : element.getType();
+          if (type in blockTypeToBlockName) {
+            setBlockType(type as keyof typeof blockTypeToBlockName);
+          }
+        }
       }
-
-      // Update font family
-      setFontFamily(
-        $getSelectionStyleValueForProperty(selection, 'font-family', 'Arial'),
-      );
-
-      // Update font size
+      // Update font properties
       setFontSize(
         $getSelectionStyleValueForProperty(selection, 'font-size', '15px'),
       );
-
-      // Update font color
       setFontColor(
-        $getSelectionStyleValueForProperty(selection, 'color', '#000000'),
+        $getSelectionStyleValueForProperty(selection, 'color', '#000'),
       );
-
-      // Update background color
       setBgColor(
-        $getSelectionStyleValueForProperty(selection, 'background-color', '#ffffff'),
+        $getSelectionStyleValueForProperty(
+          selection,
+          'background-color',
+          '#fff',
+        ),
+      );
+      setFontFamily(
+        $getSelectionStyleValueForProperty(selection, 'font-family', 'Arial'),
       );
     }
   }, [activeEditor]);
 
   useEffect(() => {
-    return editor.registerCommand(
-      SELECTION_CHANGE_COMMAND,
-      (_payload, newEditor) => {
-        $updateToolbar();
-        setActiveEditor(newEditor);
-        return false;
-      },
-      1,
-    );
-  }, [editor, $updateToolbar]);
-
-  useEffect(() => {
     return mergeRegister(
-      activeEditor.registerUpdateListener(({editorState}) => {
+      editor.registerUpdateListener(({ editorState }) => {
         editorState.read(() => {
           $updateToolbar();
         });
       }),
-      activeEditor.registerCommand(
+      editor.registerCommand(
+        SELECTION_CHANGE_COMMAND,
+        (_payload, _newEditor) => {
+          $updateToolbar();
+          setActiveEditor(_newEditor);
+          return false;
+        },
+        COMMAND_PRIORITY_EDITOR,
+      ),
+      editor.registerCommand(
         CAN_UNDO_COMMAND,
         (payload) => {
           setCanUndo(payload);
           return false;
         },
-        1,
+        COMMAND_PRIORITY_EDITOR,
       ),
-      activeEditor.registerCommand(
+      editor.registerCommand(
         CAN_REDO_COMMAND,
         (payload) => {
           setCanRedo(payload);
           return false;
         },
-        1,
+        COMMAND_PRIORITY_EDITOR,
       ),
     );
-  }, [$updateToolbar, activeEditor]);
+  }, [activeEditor, editor, $updateToolbar]);
 
-  const formatParagraph = () => {
-    if (blockType !== 'paragraph') {
-      editor.update(() => {
+  const clearFormatting = useCallback(() => {
+    activeEditor.update(() => {
+      const selection = $getSelection();
+      if ($isRangeSelection(selection)) {
+        $patchStyleText(selection, {
+          'font-size': null,
+          'color': null,
+          'background-color': null,
+          'font-family': null,
+        });
+      }
+    });
+  }, [activeEditor]);
+
+  const onFontColorSelect = useCallback(
+    (value: string) => {
+      activeEditor.update(() => {
         const selection = $getSelection();
         if ($isRangeSelection(selection)) {
-          $setBlocksType(selection, () => $createParagraphNode());
+          $patchStyleText(selection, {
+            color: value,
+          });
         }
       });
-    }
-  };
+    },
+    [activeEditor],
+  );
 
-  const formatHeading = (headingSize: HeadingTagType) => {
-    if (blockType !== headingSize) {
-      editor.update(() => {
+  const onBgColorSelect = useCallback(
+    (value: string) => {
+      activeEditor.update(() => {
         const selection = $getSelection();
         if ($isRangeSelection(selection)) {
-          $setBlocksType(selection, () => $createHeadingNode(headingSize));
+          $patchStyleText(selection, {
+            'background-color': value,
+          });
         }
       });
-    }
-  };
-
-  const formatBulletList = () => {
-    if (blockType !== 'bullet') {
-      editor.dispatchCommand(INSERT_UNORDERED_LIST_COMMAND, undefined);
-    } else {
-      editor.dispatchCommand(REMOVE_LIST_COMMAND, undefined);
-    }
-  };
-
-  const formatNumberedList = () => {
-    if (blockType !== 'number') {
-      editor.dispatchCommand(INSERT_ORDERED_LIST_COMMAND, undefined);
-    } else {
-      editor.dispatchCommand(REMOVE_LIST_COMMAND, undefined);
-    }
-  };
-
-  const formatQuote = () => {
-    if (blockType !== 'quote') {
-      editor.update(() => {
-        const selection = $getSelection();
-        if ($isRangeSelection(selection)) {
-          $setBlocksType(selection, () => $createQuoteNode());
-        }
-      });
-    }
-  };
+    },
+    [activeEditor],
+  );
 
   const applyStyleText = useCallback(
     (styles: Record<string, string>) => {
@@ -378,82 +887,136 @@ function ToolbarPlugin() {
     [activeEditor],
   );
 
-  const onFontColorSelect = useCallback(
-    (value: string) => {
-      applyStyleText({color: value});
-    },
-    [applyStyleText],
-  );
-
-  const onBgColorSelect = useCallback(
-    (value: string) => {
-      applyStyleText({'background-color': value});
-    },
-    [applyStyleText],
-  );
-
   const onFontFamilySelect = useCallback(
     (value: string) => {
-      applyStyleText({'font-family': value});
+      applyStyleText({ 'font-family': value });
     },
     [applyStyleText],
   );
 
   const onFontSizeSelect = useCallback(
     (value: string) => {
-      applyStyleText({'font-size': value});
+      applyStyleText({ 'font-size': value });
     },
     [applyStyleText],
   );
 
+  const insertVariable = () => {
+    // Get current cursor position
+    const rect = window.getSelection()?.getRangeAt(0)?.getBoundingClientRect();
+    if (rect) {
+      onInsertVariable({ x: rect.left, y: rect.bottom + 5 });
+    }
+  };
+
+  const blockTypeToBlockName = {
+    paragraph: 'Normal',
+    h1: 'Heading 1',
+    h2: 'Heading 2',
+    h3: 'Heading 3',
+    h4: 'Heading 4',
+    h5: 'Heading 5',
+    h6: 'Heading 6',
+    bullet: 'Bulleted List',
+    number: 'Numbered List',
+    quote: 'Quote',
+  } as const;
+
+  const formatParagraph = () => {
+    activeEditor.update(() => {
+      const selection = $getSelection();
+      if ($isRangeSelection(selection)) {
+        $setBlocksType(selection, () => $createParagraphNode());
+      }
+    });
+  };
+
+  const formatHeading = (headingSize: HeadingTagType) => {
+    if (blockType !== headingSize) {
+      activeEditor.update(() => {
+        const selection = $getSelection();
+        $setBlocksType(selection, () => $createHeadingNode(headingSize));
+      });
+    }
+  };
+
+  const formatBulletList = () => {
+    if (blockType !== 'bullet') {
+      activeEditor.dispatchCommand(INSERT_UNORDERED_LIST_COMMAND, undefined);
+    } else {
+      activeEditor.dispatchCommand(REMOVE_LIST_COMMAND, undefined);
+    }
+  };
+
+  const formatNumberedList = () => {
+    if (blockType !== 'number') {
+      activeEditor.dispatchCommand(INSERT_ORDERED_LIST_COMMAND, undefined);
+    } else {
+      activeEditor.dispatchCommand(REMOVE_LIST_COMMAND, undefined);
+    }
+  };
+
+  const formatQuote = () => {
+    if (blockType !== 'quote') {
+      activeEditor.update(() => {
+        const selection = $getSelection();
+        $setBlocksType(selection, () => $createQuoteNode());
+      });
+    }
+  };
+
   return (
-    <div className="flex flex-wrap items-center gap-2 p-3 bg-white border-b border-gray-200">
+    <div className="flex flex-wrap items-center gap-1 p-2 border-b border-gray-300 bg-gray-50">
       {/* Undo/Redo */}
       <div className="flex">
         <ToolbarButton
           disabled={!canUndo}
           onClick={() => activeEditor.dispatchCommand(UNDO_COMMAND, undefined)}
-          title="Undo (Ctrl+Z)"
+          title="Undo"
         >
           <Undo2 className="w-4 h-4" />
         </ToolbarButton>
         <ToolbarButton
           disabled={!canRedo}
           onClick={() => activeEditor.dispatchCommand(REDO_COMMAND, undefined)}
-          title="Redo (Ctrl+Y)"
+          title="Redo"
         >
           <Redo2 className="w-4 h-4" />
         </ToolbarButton>
       </div>
 
-      <div className="w-px h-6 bg-gray-300" />
+      <div className="w-px h-6 bg-gray-300 mx-1" />
 
       {/* Block Type */}
       <ToolbarDropdown
         value={blockType}
         onChange={(value) => {
-          if (value === 'paragraph') formatParagraph();
-          else if (value === 'h1') formatHeading('h1');
-          else if (value === 'h2') formatHeading('h2');
-          else if (value === 'h3') formatHeading('h3');
-          else if (value === 'h4') formatHeading('h4');
-          else if (value === 'h5') formatHeading('h5');
-          else if (value === 'h6') formatHeading('h6');
-          else if (value === 'quote') formatQuote();
+          if (value === 'paragraph') {
+            formatParagraph();
+          } else if (value === 'h1') {
+            formatHeading('h1');
+          } else if (value === 'h2') {
+            formatHeading('h2');
+          } else if (value === 'h3') {
+            formatHeading('h3');
+          } else if (value === 'h4') {
+            formatHeading('h4');
+          } else if (value === 'h5') {
+            formatHeading('h5');
+          } else if (value === 'h6') {
+            formatHeading('h6');
+          } else if (value === 'bullet') {
+            formatBulletList();
+          } else if (value === 'number') {
+            formatNumberedList();
+          } else if (value === 'quote') {
+            formatQuote();
+          }
         }}
-        options={[
-          ['paragraph', 'Normal'],
-          ['h1', 'Heading 1'],
-          ['h2', 'Heading 2'],
-          ['h3', 'Heading 3'],
-          ['h4', 'Heading 4'],
-          ['h5', 'Heading 5'],
-          ['h6', 'Heading 6'],
-          ['quote', 'Quote'],
-        ]}
+        options={Object.entries(blockTypeToBlockName)}
       />
 
-      <div className="w-px h-6 bg-gray-300" />
+      <div className="w-px h-6 bg-gray-300 mx-1" />
 
       {/* Font Family */}
       <ToolbarDropdown
@@ -469,28 +1032,28 @@ function ToolbarPlugin() {
         options={FONT_SIZE_OPTIONS}
       />
 
-      <div className="w-px h-6 bg-gray-300" />
+      <div className="w-px h-6 bg-gray-300 mx-1" />
 
       {/* Text Formatting */}
       <div className="flex">
         <ToolbarButton
           onClick={() => activeEditor.dispatchCommand(FORMAT_TEXT_COMMAND, 'bold')}
           active={isBold}
-          title="Bold (Ctrl+B)"
+          title="Bold"
         >
           <Bold className="w-4 h-4" />
         </ToolbarButton>
         <ToolbarButton
           onClick={() => activeEditor.dispatchCommand(FORMAT_TEXT_COMMAND, 'italic')}
           active={isItalic}
-          title="Italic (Ctrl+I)"
+          title="Italic"
         >
           <Italic className="w-4 h-4" />
         </ToolbarButton>
         <ToolbarButton
           onClick={() => activeEditor.dispatchCommand(FORMAT_TEXT_COMMAND, 'underline')}
           active={isUnderline}
-          title="Underline (Ctrl+U)"
+          title="Underline"
         >
           <Underline className="w-4 h-4" />
         </ToolbarButton>
@@ -501,26 +1064,19 @@ function ToolbarPlugin() {
         >
           <Strikethrough className="w-4 h-4" />
         </ToolbarButton>
-        <ToolbarButton
-          onClick={() => activeEditor.dispatchCommand(FORMAT_TEXT_COMMAND, 'code')}
-          active={isCode}
-          title="Code"
-        >
-          {'<>'}
-        </ToolbarButton>
       </div>
 
-      <div className="w-px h-6 bg-gray-300" />
+      <div className="w-px h-6 bg-gray-300 mx-1" />
 
       {/* Colors */}
       <div className="flex items-center gap-1">
-        <span className="text-sm text-gray-600 font-medium">A</span>
+        <span className="text-xs text-gray-600">Color:</span>
         <ColorPicker value={fontColor} onChange={onFontColorSelect} />
-        <span className="text-sm text-gray-600 bg-gray-200 px-1 rounded">BG</span>
+        <span className="text-xs text-gray-600">BG:</span>
         <ColorPicker value={bgColor} onChange={onBgColorSelect} />
       </div>
 
-      <div className="w-px h-6 bg-gray-300" />
+      <div className="w-px h-6 bg-gray-300 mx-1" />
 
       {/* Alignment */}
       <div className="flex">
@@ -544,33 +1100,31 @@ function ToolbarPlugin() {
         </ToolbarButton>
         <ToolbarButton
           onClick={() => activeEditor.dispatchCommand(FORMAT_ELEMENT_COMMAND, 'justify')}
-          title="Justify"
+          title="Align Justify"
         >
           <AlignJustify className="w-4 h-4" />
         </ToolbarButton>
       </div>
 
-      <div className="w-px h-6 bg-gray-300" />
+      <div className="w-px h-6 bg-gray-300 mx-1" />
 
       {/* Lists */}
       <div className="flex">
         <ToolbarButton
           onClick={formatBulletList}
-          active={blockType === 'bullet'}
-          title="Bullet List"
+          title="Bulleted List"
         >
           <List className="w-4 h-4" />
         </ToolbarButton>
         <ToolbarButton
           onClick={formatNumberedList}
-          active={blockType === 'number'}
           title="Numbered List"
         >
           <ListOrdered className="w-4 h-4" />
         </ToolbarButton>
       </div>
 
-      <div className="w-px h-6 bg-gray-300" />
+      <div className="w-px h-6 bg-gray-300 mx-1" />
 
       {/* Indent */}
       <div className="flex">
@@ -587,15 +1141,46 @@ function ToolbarPlugin() {
           <Indent className="w-4 h-4" />
         </ToolbarButton>
       </div>
+
+      <div className="w-px h-6 bg-gray-300 mx-1" />
+
+      {/* Quote */}
+      <ToolbarButton
+        onClick={formatQuote}
+        title="Quote"
+      >
+        <Quote className="w-4 h-4" />
+      </ToolbarButton>
+
+      <div className="w-px h-6 bg-gray-300 mx-1" />
+
+      {/* Variable Insert */}
+      <ToolbarButton
+        onClick={insertVariable}
+        title="Insert Variable"
+      >
+        <AtSign className="w-4 h-4" />
+      </ToolbarButton>
+
+      <div className="flex-1" />
+
+      {/* Clear Formatting */}
+      <button
+        type="button"
+        onClick={clearFormatting}
+        className="px-2 py-1 text-xs text-gray-600 hover:text-gray-800 border border-gray-300 rounded"
+      >
+        Clear Format
+      </button>
     </div>
   );
 }
 
 // Helper functions
 function $findMatchingParent(
-  node: any,
-  findFn: (node: any) => boolean,
-): any | null {
+  node: LexicalNode,
+  findFn: (node: LexicalNode) => boolean,
+): LexicalNode | null {
   let curr = node;
 
   while (curr !== null && curr.getParent() !== null && !findFn(curr)) {
@@ -605,14 +1190,14 @@ function $findMatchingParent(
   return findFn(curr) ? curr : null;
 }
 
-function $isRootOrShadowRoot(node: any): boolean {
-  return node.getKey() === 'root' || node.constructor.name === 'ShadowRoot';
+function $isRootOrShadowRoot(node: LexicalNode): boolean {
+  return node.getParent() === null;
 }
 
-function $getNearestNodeOfType(
-  node: any,
-  klass: any,
-): any | null {
+function $getNearestNodeOfType<T extends LexicalNode>(
+  node: LexicalNode,
+  klass: new (...args: never[]) => T,
+): T | null {
   let parent = node;
 
   while (parent != null) {
@@ -626,7 +1211,7 @@ function $getNearestNodeOfType(
   return null;
 }
 
-function $setBlocksType(selection: any, createElement: () => any): void {
+function $setBlocksType(selection: any, createElement: () => LexicalNode): void {
   const nodes = selection.getNodes();
 
   if (nodes.length === 0) {
@@ -644,13 +1229,14 @@ function $setBlocksType(selection: any, createElement: () => any): void {
   topLevelElement.replace(newElement, true);
 }
 
-// Function to convert Lexical editor state to our custom format
-function convertEditorStateToCustomFormat(editorState: EditorState) {
+// Function to convert Lexical editor state to our new custom format
+function convertEditorStateToCustomFormat(editorState: EditorState, variables: VariableDefinition[]) {
   interface TextNode {
     type: string;
     text: string;
     format?: number;
     style?: string;
+    variableId?: string;
   }
 
   interface ChildNode {
@@ -661,11 +1247,9 @@ function convertEditorStateToCustomFormat(editorState: EditorState) {
   }
   
   const lexicalJson = { root: { children: [] as ChildNode[] } };
-  const contextMap: Record<string, string> = {};
-  const promptMap: Record<string, string> = {};
 
   // Helper function to extract text nodes with their formatting
-  const extractTextNodes = (node: any): TextNode[] => {
+  const extractTextNodes = (node: LexicalNode): TextNode[] => {
     const textNodes: TextNode[] = [];
     const children = node.getChildren();
     
@@ -677,13 +1261,34 @@ function convertEditorStateToCustomFormat(editorState: EditorState) {
         };
         
         // Add format information if present
-        const format = child.getFormat();
-        if (format > 0) {
+        const format = (child as TextNode).getFormat();
+        if (format) {
           textNode.format = format;
         }
         
         // Add style information if present
-        const style = child.getStyle();
+        const style = (child as TextNode).getStyle();
+        if (style) {
+          textNode.style = style;
+        }
+        
+        textNodes.push(textNode);
+      } else if (child.getType() === 'variable') {
+        const variableNode = child as VariableNode;
+        const textNode: TextNode = {
+          type: 'variable',
+          text: variableNode.getTextContent(),
+          variableId: variableNode.getVariableId()
+        };
+        
+        // Add format information if present
+        const format = variableNode.getFormat();
+        if (format) {
+          textNode.format = format;
+        }
+        
+        // Add style information if present
+        const style = variableNode.getStyle();
         if (style) {
           textNode.style = style;
         }
@@ -713,9 +1318,6 @@ function convertEditorStateToCustomFormat(editorState: EditorState) {
           level: level,
           children: textNodes.length > 0 ? textNodes : [{ type: 'text', text: textContent }]
         });
-
-        // Extract variables from text content
-        extractVariables(textContent, contextMap, promptMap);
       } else if ($isQuoteNode(node)) {
         const textContent = node.getTextContent();
         const textNodes = extractTextNodes(node);
@@ -724,9 +1326,6 @@ function convertEditorStateToCustomFormat(editorState: EditorState) {
           type: 'quote',
           children: textNodes.length > 0 ? textNodes : [{ type: 'text', text: textContent }]
         });
-
-        // Extract variables from text content
-        extractVariables(textContent, contextMap, promptMap);
       } else if ($isListNode(node)) {
         const listType = node.getListType();
         const items: TextNode[][] = [];
@@ -738,7 +1337,6 @@ function convertEditorStateToCustomFormat(editorState: EditorState) {
             const itemText = listChild.getTextContent();
             const textNodes = extractTextNodes(listChild);
             items.push(textNodes.length > 0 ? textNodes : [{ type: 'text', text: itemText }]);
-            extractVariables(itemText, contextMap, promptMap);
           }
         }
         
@@ -758,45 +1356,14 @@ function convertEditorStateToCustomFormat(editorState: EditorState) {
           type: 'paragraph',
           children: textNodes.length > 0 ? textNodes : [{ type: 'text', text: textContent }]
         });
-
-        // Extract variables from text content
-        extractVariables(textContent, contextMap, promptMap);
       }
     }
   });
 
   return {
     lexical_json: lexicalJson,
-    context_map: contextMap,
-    prompt_map: promptMap
+    variables: variables
   };
-}
-
-function extractVariables(text: string, contextMap: Record<string, string>, promptMap: Record<string, string>) {
-  // Extract {{variable}} patterns
-  const variableRegex = /\{\{([^}]+)\}\}/g;
-  let match: RegExpExecArray | null;
-  
-  // Fix linter error by separating assignment from condition
-  match = variableRegex.exec(text);
-  while (match !== null) {
-    const varName = match[1];
-    if (!contextMap[varName]) {
-      contextMap[varName] = `[${varName}]`; // placeholder value
-    }
-    match = variableRegex.exec(text);
-  }
-
-  // Extract [[prompt]] patterns  
-  const promptRegex = /\[\[([^\]]+)\]\]/g;
-  match = promptRegex.exec(text);
-  while (match !== null) {
-    const promptName = match[1];
-    if (!promptMap[promptName]) {
-      promptMap[promptName] = `[${promptName} description]`; // placeholder value
-    }
-    match = promptRegex.exec(text);
-  }
 }
 
 interface JsonOutput {
@@ -811,12 +1378,12 @@ interface JsonOutput {
           text: string;
           format?: number;
           style?: string;
+          variableId?: string;
         }>;
       }>;
     };
   };
-  context_map: Record<string, string>;
-  prompt_map: Record<string, string>;
+  variables: VariableDefinition[];
 }
 
 // Plugin to load template content from custom format
@@ -860,6 +1427,20 @@ function TemplateLoaderPlugin({ templateData }: { templateData: any }) {
                   textNode.setStyle(textChild.style);
                 }
                 node.append(textNode);
+              } else if (textChild.type === 'variable' && textChild.variableId) {
+                const variableNode = $createVariableNode(textChild.variableId, textChild.text);
+                // Apply formatting if present
+                if (textChild.format) {
+                  if (textChild.format & 1) variableNode.toggleFormat('bold');
+                  if (textChild.format & 2) variableNode.toggleFormat('italic');
+                  if (textChild.format & 4) variableNode.toggleFormat('strikethrough');
+                  if (textChild.format & 8) variableNode.toggleFormat('underline');
+                }
+                // Apply inline styles if present
+                if (textChild.style) {
+                  variableNode.setStyle(textChild.style);
+                }
+                node.append(variableNode);
               }
             }
           }
@@ -881,11 +1462,19 @@ export function LexicalEditor({ templateId }: { templateId?: string }) {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [loadError, setLoadError] = useState<string>('');
   const [templateData, setTemplateData] = useState<any>(null);
+  
+  // New variable management state
+  const [variables, setVariables] = useState<VariableDefinition[]>([]);
+  const [showVariablePopup, setShowVariablePopup] = useState(false);
+  const [popupPosition, setPopupPosition] = useState({ x: 0, y: 0 });
+  const [editingVariable, setEditingVariable] = useState<VariableDefinition | undefined>();
+  const [showVariablesSidebar, setShowVariablesSidebar] = useState(false);
+  const [variableToInsert, setVariableToInsert] = useState<VariableDefinition | null>(null);
 
   const initialConfig = {
     namespace: 'WordAIEditor',
     theme,
-    nodes: [HeadingNode, QuoteNode, ListNode, ListItemNode],
+    nodes: [HeadingNode, QuoteNode, ListNode, ListItemNode, VariableNode],
     onError: (error: Error) => {
       console.error('Lexical error:', error);
     },
@@ -897,7 +1486,6 @@ export function LexicalEditor({ templateId }: { templateId?: string }) {
       loadTemplate(templateId);
     }
   }, [templateId]);
-
 
   const loadTemplate = async (id: string) => {
     setIsLoading(true);
@@ -918,6 +1506,11 @@ export function LexicalEditor({ templateId }: { templateId?: string }) {
       setTemplateName(data.name);
       setTemplateData(data);
       
+      // Load variables from template data
+      if (data.variables) {
+        setVariables(data.variables);
+      }
+      
     } catch (err) {
       setLoadError(`Failed to load template: ${err instanceof Error ? err.message : 'Unknown error'}`);
     } finally {
@@ -926,8 +1519,41 @@ export function LexicalEditor({ templateId }: { templateId?: string }) {
   };
 
   const onChange = (editorState: EditorState) => {
-    const customFormat = convertEditorStateToCustomFormat(editorState);
+    const customFormat = convertEditorStateToCustomFormat(editorState, variables);
     setJsonOutput(customFormat);
+  };
+
+  const handleInsertVariable = (position: { x: number; y: number }) => {
+    setPopupPosition(position);
+    setEditingVariable(undefined);
+    setShowVariablePopup(true);
+  };
+
+  const handleSaveVariable = (variable: VariableDefinition) => {
+    setVariables(prev => {
+      const existing = prev.find(v => v.id === variable.id);
+      if (existing) {
+        return prev.map(v => v.id === variable.id ? variable : v);
+      } else {
+        return [...prev, variable];
+      }
+    });
+
+    // Insert variable into editor if it's a new variable
+    if (!editingVariable) {
+      setVariableToInsert(variable);
+    }
+  };
+
+  const handleEditVariable = (variable: VariableDefinition) => {
+    setEditingVariable(variable);
+    setPopupPosition({ x: window.innerWidth / 2 - 160, y: window.innerHeight / 2 - 150 });
+    setShowVariablePopup(true);
+  };
+
+  const handleDeleteVariable = (variableId: string) => {
+    setVariables(prev => prev.filter(v => v.id !== variableId));
+    // TODO: Remove variable nodes from editor
   };
 
   const handleSaveTemplate = async () => {
@@ -952,6 +1578,7 @@ export function LexicalEditor({ templateId }: { templateId?: string }) {
         body: JSON.stringify({
           name: templateName.trim(),
           lexical_json: jsonOutput.lexical_json,
+          variables: variables,
         }),
       });
 
@@ -1009,14 +1636,13 @@ export function LexicalEditor({ templateId }: { templateId?: string }) {
     <div className="w-full max-w-4xl mx-auto">
       <div className="bg-white border border-gray-300 rounded-lg overflow-hidden shadow-sm">
         <LexicalComposer initialConfig={initialConfig} key={templateId || 'new'}>
-          <ToolbarPlugin />
+          <ToolbarPlugin onInsertVariable={handleInsertVariable} />
           <div className="relative">
             <RichTextPlugin
               contentEditable={
                 <ContentEditable 
                   className="min-h-[400px] max-h-[600px] p-4 outline-none resize-none overflow-y-auto"
                   style={{
-                    // Custom CSS for variable highlighting
                     fontSize: '15px',
                     lineHeight: '1.5',
                   }}
@@ -1024,7 +1650,7 @@ export function LexicalEditor({ templateId }: { templateId?: string }) {
               }
               placeholder={
                 <div className="absolute top-4 left-4 text-gray-400 pointer-events-none">
-                  Start typing your template... Use {"{{variable}}"} for variables and {"[[prompt]]"} for AI prompts.
+                  Start typing your template... Use the @ button or type @ to add variables.
                 </div>
               }
               ErrorBoundary={LexicalErrorBoundary}
@@ -1032,11 +1658,34 @@ export function LexicalEditor({ templateId }: { templateId?: string }) {
             <OnChangePlugin onChange={onChange} />
             <HistoryPlugin />
             <ListPlugin />
+            <VariableInsertionPlugin 
+              onInsertVariable={handleInsertVariable}
+              variableToInsert={variableToInsert}
+              onVariableInserted={() => setVariableToInsert(null)}
+            />
             {/* Load template content using standard Lexical approach */}
             <TemplateLoaderPlugin templateData={templateData} />
           </div>
         </LexicalComposer>
       </div>
+
+      {/* Variable Popup */}
+      <VariablePopup
+        isOpen={showVariablePopup}
+        onClose={() => setShowVariablePopup(false)}
+        onSave={handleSaveVariable}
+        variable={editingVariable}
+        position={popupPosition}
+      />
+
+      {/* Variables Sidebar */}
+      <VariablesSidebar
+        variables={variables}
+        onEditVariable={handleEditVariable}
+        onDeleteVariable={handleDeleteVariable}
+        isOpen={showVariablesSidebar}
+        onToggle={() => setShowVariablesSidebar(!showVariablesSidebar)}
+      />
 
       {/* Save Template Section */}
       <div className="mt-6 bg-white p-4 rounded-lg border border-gray-300">
@@ -1092,16 +1741,6 @@ export function LexicalEditor({ templateId }: { templateId?: string }) {
           </pre>
         </div>
       )}
-
-      {/* CSS for variable highlighting */}
-      <style>{`
-        .lexical-editor-text:has-text('{{') {
-          background-color: #fef3c7;
-          padding: 2px 4px;
-          border-radius: 3px;
-          font-weight: 500;
-        }
-      `}</style>
     </div>
   );
 } 

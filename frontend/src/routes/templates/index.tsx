@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useEffect, useState } from 'react'
-import { FileText, Loader2, RefreshCw } from 'lucide-react'
+import { FileText, Loader2, RefreshCw, Edit, FileEdit, Trash2, Calendar } from 'lucide-react'
 
 export const Route = createFileRoute('/templates/')({
   component: TemplatesList,
@@ -163,36 +163,40 @@ function TemplatesList() {
               <div key={template.id} className="px-6 py-4 hover:bg-gray-50 transition-colors">
                 <div className="flex justify-between items-start">
                   <div className="flex-1">
-                    <h3 className="text-lg font-medium text-gray-900 mb-1">
-                      {template.name}
-                    </h3>
-                    <p className="text-sm text-gray-500">
-                      Created: {formatDate(template.created_at)}
-                    </p>
+                    <div className="flex items-center gap-2 mb-2">
+                      <FileText className="w-5 h-5 text-gray-400" />
+                      <h3 className="text-lg font-medium text-gray-900">
+                        {template.name}
+                      </h3>
+                    </div>
+                    <div className="flex items-center gap-1 text-sm text-gray-500">
+                      <Calendar className="w-4 h-4" />
+                      <span>Created: {formatDate(template.created_at)}</span>
+                    </div>
                   </div>
-                  <div className="flex gap-2 ml-4">
-                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                      ID: {template.id}
-                    </span>
+                  <div className="flex gap-2 ml-6">
                     <Link 
                       to="/editor/$templateId" 
                       params={{ templateId: template.id }}
-                      className="text-gray-600 hover:text-gray-800 text-sm font-medium px-3 py-1 border border-gray-400 rounded hover:bg-gray-50 transition-colors"
+                      className="inline-flex items-center gap-1.5 text-gray-600 hover:text-gray-800 text-sm font-medium px-3 py-2 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
                     >
+                      <Edit className="w-4 h-4" />
                       Edit
                     </Link>
                     <Link 
                       to="/templates/$templateId" 
                       params={{ templateId: template.id }}
-                      className="text-blue-600 hover:text-blue-800 text-sm font-medium px-3 py-1 border border-blue-600 rounded hover:bg-blue-50 transition-colors"
+                      className="inline-flex items-center gap-1.5 text-blue-600 hover:text-blue-800 text-sm font-medium px-3 py-2 border border-blue-300 rounded-md hover:bg-blue-50 transition-colors"
                     >
+                      <FileEdit className="w-4 h-4" />
                       Fill Template
                     </Link>
                     <button
                       type="button"
                       onClick={() => deleteTemplate(template.id, template.name)}
-                      className="text-red-600 hover:text-red-800 text-sm font-medium px-3 py-1 border border-red-600 rounded hover:bg-red-50 transition-colors"
+                      className="inline-flex items-center gap-1.5 text-red-600 hover:text-red-800 text-sm font-medium px-3 py-2 border border-red-300 rounded-md hover:bg-red-50 transition-colors"
                     >
+                      <Trash2 className="w-4 h-4" />
                       Delete
                     </button>
                   </div>
