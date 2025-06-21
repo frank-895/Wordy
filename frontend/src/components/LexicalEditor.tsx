@@ -73,7 +73,9 @@ import {
   ListItemNode,
   INSERT_ORDERED_LIST_COMMAND,
   INSERT_UNORDERED_LIST_COMMAND,
-  REMOVE_LIST_COMMAND
+  REMOVE_LIST_COMMAND,
+  $createListNode,
+  $createListItemNode
 } from '@lexical/list';
 import { RichTextPlugin } from '@lexical/react/LexicalRichTextPlugin';
 import { ListPlugin } from '@lexical/react/LexicalListPlugin';
@@ -479,8 +481,6 @@ function VariablePopup({
     </div>
   );
 }
-
-
 
 // Toolbar button component
 function ToolbarButton({ 
@@ -1311,7 +1311,7 @@ function convertEditorStateToCustomFormat(editorState: EditorState, variables: V
     type: string;
     level?: number;
     listType?: string;
-    children: Array<TextNode>;
+    children: Array<TextNode | { type: string; children: TextNode[] }>;
   }
   
   const lexicalJson = { root: { children: [] as ChildNode[] } };
@@ -1409,13 +1409,16 @@ function convertEditorStateToCustomFormat(editorState: EditorState, variables: V
           }
         }
         
+        // Create proper list structure with each item as a separate listitem
+        const listItems = items.map(itemNodes => ({
+          type: 'listitem',
+          children: itemNodes
+        }));
+        
         lexicalJson.root.children.push({
           type: 'list',
           listType: listType,
-          children: items.flat().map((textNode, index) => ({
-            ...textNode,
-            type: index === 0 || items[Math.floor(index / items.length)] ? 'listitem' : 'text'
-          }))
+          children: listItems
         });
       } else if (node.getType() === 'paragraph') {
         const textContent = node.getTextContent();
@@ -1444,11 +1447,19 @@ interface JsonOutput {
         listType?: string;
         children: Array<{
           type: string;
-          text: string;
+          text?: string;
           format?: number;
           style?: string;
           variableId?: string;
           variableType?: 'variable' | 'prompt';
+          children?: Array<{
+            type: string;
+            text: string;
+            format?: number;
+            style?: string;
+            variableId?: string;
+            variableType?: 'variable' | 'prompt';
+          }>;
         }>;
       }>;
     };
@@ -1475,6 +1486,12 @@ function TemplateLoaderPlugin({ templateData }: { templateData: any }) {
             node = $createHeadingNode(headingTag);
           } else if (child.type === 'quote') {
             node = $createQuoteNode();
+          } else if (child.type === 'list') {
+            // Handle list nodes
+            const listType = child.listType === 'number' ? 'number' : 'bullet';
+            node = listType === 'number' 
+              ? $createListNode('number') 
+              : $createListNode('bullet');
           } else {
             // Default to paragraph
             node = $createParagraphNode();
@@ -1483,7 +1500,52 @@ function TemplateLoaderPlugin({ templateData }: { templateData: any }) {
           // Add text children
           if (child.children) {
             for (const textChild of child.children) {
-              if (textChild.type === 'text' && textChild.text) {
+              if (textChild.type === 'listitem' && textChild.children) {
+                // Handle list items
+                const listItemNode = $createListItemNode();
+                
+                for (const itemTextChild of textChild.children) {
+                  if (itemTextChild.type === 'text' && itemTextChild.text) {
+                    const textNode = $createTextNode(itemTextChild.text);
+                    // Apply formatting if present
+                    if (itemTextChild.format) {
+                      if (itemTextChild.format & 1) textNode.toggleFormat('bold');
+                      if (itemTextChild.format & 2) textNode.toggleFormat('italic');
+                      if (itemTextChild.format & 4) textNode.toggleFormat('strikethrough');
+                      if (itemTextChild.format & 8) textNode.toggleFormat('underline');
+                    }
+                    // Apply inline styles if present
+                    if (itemTextChild.style) {
+                      textNode.setStyle(itemTextChild.style);
+                    }
+                    listItemNode.append(textNode);
+                  } else if (itemTextChild.type === 'variable' && itemTextChild.variableId) {
+                    // Handle variables in list items
+                    let variableType = itemTextChild.variableType;
+                    if (!variableType && templateData.variables) {
+                      const variableDefinition = templateData.variables.find((v: VariableDefinition) => v.id === itemTextChild.variableId);
+                      variableType = variableDefinition?.type || 'variable';
+                    } else {
+                      variableType = variableType || 'variable';
+                    }
+                    const variableNode = $createVariableNode(itemTextChild.variableId, variableType, itemTextChild.text || '');
+                    // Apply formatting if present
+                    if (itemTextChild.format) {
+                      if (itemTextChild.format & 1) variableNode.toggleFormat('bold');
+                      if (itemTextChild.format & 2) variableNode.toggleFormat('italic');
+                      if (itemTextChild.format & 4) variableNode.toggleFormat('strikethrough');
+                      if (itemTextChild.format & 8) variableNode.toggleFormat('underline');
+                    }
+                    // Apply inline styles if present
+                    if (itemTextChild.style) {
+                      variableNode.setStyle(itemTextChild.style);
+                    }
+                    listItemNode.append(variableNode);
+                  }
+                }
+                
+                node.append(listItemNode);
+              } else if (textChild.type === 'text' && textChild.text) {
                 const textNode = $createTextNode(textChild.text);
                 // Apply formatting if present
                 if (textChild.format) {
@@ -1506,7 +1568,7 @@ function TemplateLoaderPlugin({ templateData }: { templateData: any }) {
                 } else {
                   variableType = variableType || 'variable';
                 }
-                const variableNode = $createVariableNode(textChild.variableId, variableType, textChild.text);
+                const variableNode = $createVariableNode(textChild.variableId, variableType, textChild.text || '');
                 // Apply formatting if present
                 if (textChild.format) {
                   if (textChild.format & 1) variableNode.toggleFormat('bold');
@@ -1766,8 +1828,6 @@ export function LexicalEditor({ templateId }: { templateId?: string }) {
         variable={editingVariable}
         position={popupPosition}
       />
-
-
 
       {/* Save Template Section */}
       <div className="mt-6 bg-white p-4 rounded-lg border border-gray-300">
