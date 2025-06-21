@@ -15,6 +15,23 @@ import {
   CAN_UNDO_COMMAND,
   SELECTION_CHANGE_COMMAND,
 } from 'lexical';
+import { 
+  AlignLeft, 
+  AlignCenter, 
+  AlignRight, 
+  AlignJustify,
+  Bold,
+  Italic,
+  Underline,
+  Strikethrough,
+  Undo2,
+  Redo2,
+  List,
+  ListOrdered,
+  Indent,
+  Outdent,
+  Quote
+} from 'lucide-react';
 import { LexicalComposer } from '@lexical/react/LexicalComposer';
 import { ContentEditable } from '@lexical/react/LexicalContentEditable';
 import { HistoryPlugin } from '@lexical/react/LexicalHistoryPlugin';
@@ -398,14 +415,14 @@ function ToolbarPlugin() {
           onClick={() => activeEditor.dispatchCommand(UNDO_COMMAND, undefined)}
           title="Undo (Ctrl+Z)"
         >
-          ↶
+          <Undo2 className="w-4 h-4" />
         </ToolbarButton>
         <ToolbarButton
           disabled={!canRedo}
           onClick={() => activeEditor.dispatchCommand(REDO_COMMAND, undefined)}
           title="Redo (Ctrl+Y)"
         >
-          ↷
+          <Redo2 className="w-4 h-4" />
         </ToolbarButton>
       </div>
 
@@ -461,28 +478,28 @@ function ToolbarPlugin() {
           active={isBold}
           title="Bold (Ctrl+B)"
         >
-          <strong>B</strong>
+          <Bold className="w-4 h-4" />
         </ToolbarButton>
         <ToolbarButton
           onClick={() => activeEditor.dispatchCommand(FORMAT_TEXT_COMMAND, 'italic')}
           active={isItalic}
           title="Italic (Ctrl+I)"
         >
-          <em>I</em>
+          <Italic className="w-4 h-4" />
         </ToolbarButton>
         <ToolbarButton
           onClick={() => activeEditor.dispatchCommand(FORMAT_TEXT_COMMAND, 'underline')}
           active={isUnderline}
           title="Underline (Ctrl+U)"
         >
-          <u>U</u>
+          <Underline className="w-4 h-4" />
         </ToolbarButton>
         <ToolbarButton
           onClick={() => activeEditor.dispatchCommand(FORMAT_TEXT_COMMAND, 'strikethrough')}
           active={isStrikethrough}
           title="Strikethrough"
         >
-          <s>S</s>
+          <Strikethrough className="w-4 h-4" />
         </ToolbarButton>
         <ToolbarButton
           onClick={() => activeEditor.dispatchCommand(FORMAT_TEXT_COMMAND, 'code')}
@@ -497,9 +514,9 @@ function ToolbarPlugin() {
 
       {/* Colors */}
       <div className="flex items-center gap-1">
-        <span className="text-sm text-gray-600">A</span>
+        <span className="text-sm text-gray-600 font-medium">A</span>
         <ColorPicker value={fontColor} onChange={onFontColorSelect} />
-        <span className="text-sm text-gray-600">⬛</span>
+        <span className="text-sm text-gray-600 bg-gray-200 px-1 rounded">BG</span>
         <ColorPicker value={bgColor} onChange={onBgColorSelect} />
       </div>
 
@@ -511,25 +528,25 @@ function ToolbarPlugin() {
           onClick={() => activeEditor.dispatchCommand(FORMAT_ELEMENT_COMMAND, 'left')}
           title="Align Left"
         >
-          ≡
+          <AlignLeft className="w-4 h-4" />
         </ToolbarButton>
         <ToolbarButton
           onClick={() => activeEditor.dispatchCommand(FORMAT_ELEMENT_COMMAND, 'center')}
           title="Align Center"
         >
-          ≈
+          <AlignCenter className="w-4 h-4" />
         </ToolbarButton>
         <ToolbarButton
           onClick={() => activeEditor.dispatchCommand(FORMAT_ELEMENT_COMMAND, 'right')}
           title="Align Right"
         >
-          ≣
+          <AlignRight className="w-4 h-4" />
         </ToolbarButton>
         <ToolbarButton
           onClick={() => activeEditor.dispatchCommand(FORMAT_ELEMENT_COMMAND, 'justify')}
           title="Justify"
         >
-          ≡
+          <AlignJustify className="w-4 h-4" />
         </ToolbarButton>
       </div>
 
@@ -542,14 +559,14 @@ function ToolbarPlugin() {
           active={blockType === 'bullet'}
           title="Bullet List"
         >
-          •
+          <List className="w-4 h-4" />
         </ToolbarButton>
         <ToolbarButton
           onClick={formatNumberedList}
           active={blockType === 'number'}
           title="Numbered List"
         >
-          1.
+          <ListOrdered className="w-4 h-4" />
         </ToolbarButton>
       </div>
 
@@ -561,13 +578,13 @@ function ToolbarPlugin() {
           onClick={() => activeEditor.dispatchCommand(OUTDENT_CONTENT_COMMAND, undefined)}
           title="Outdent"
         >
-          ⇤
+          <Outdent className="w-4 h-4" />
         </ToolbarButton>
         <ToolbarButton
           onClick={() => activeEditor.dispatchCommand(INDENT_CONTENT_COMMAND, undefined)}
           title="Indent"
         >
-          ⇥
+          <Indent className="w-4 h-4" />
         </ToolbarButton>
       </div>
     </div>

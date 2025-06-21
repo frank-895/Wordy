@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useEffect, useState } from 'react'
+import { FileText, Loader2, RefreshCw } from 'lucide-react'
 
 export const Route = createFileRoute('/templates/')({
   component: TemplatesList,
@@ -87,7 +88,7 @@ function TemplatesList() {
     return (
       <div className="py-8">
         <div className="text-center">
-          <div className="inline-block w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+          <Loader2 className="w-8 h-8 animate-spin text-blue-500 mx-auto" />
           <p className="mt-4 text-gray-600">Loading templates...</p>
         </div>
       </div>
@@ -126,9 +127,7 @@ function TemplatesList() {
       {templates.length === 0 ? (
         <div className="bg-white rounded-lg shadow-md p-8 text-center">
           <div className="text-gray-400 mb-4">
-            <svg className="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-label="Document icon">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-            </svg>
+            <FileText className="w-16 h-16 mx-auto" />
           </div>
           <h3 className="text-xl font-semibold text-gray-900 mb-2">No templates found</h3>
           <p className="text-gray-600 mb-4">
@@ -151,8 +150,9 @@ function TemplatesList() {
               <button
                 type="button"
                 onClick={fetchTemplates}
-                className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                className="text-blue-600 hover:text-blue-800 text-sm font-medium flex items-center gap-1"
               >
+                <RefreshCw className="w-4 h-4" />
                 Refresh
               </button>
             </div>
