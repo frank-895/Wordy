@@ -6,8 +6,6 @@ from django.conf.urls.static import static
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('api/', include('prompts.urls')),
-    path('api/documents/', include('documents.urls')),
-    
+    path('api/', include('generate_document.urls')),
     # for serving media files during development only
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
