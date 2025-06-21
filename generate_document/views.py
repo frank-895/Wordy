@@ -8,7 +8,7 @@ from .services.lexical_processor import parse_lexical_json
 from django.core.exceptions import ObjectDoesNotExist
 
 @csrf_exempt
-def save_template(request):
+def create_template(request):
     """
     POST: Save a new Lexical JSON template.
     Body: { "name": "My Template", "lexical_json": {...} }
@@ -39,7 +39,74 @@ def list_templates(request):
     return JsonResponse({'templates': list(templates)})
 
 
-def form_fields(request, template_id):
+def get_template(request, template_id):
+    """
+    GET: Get a specific template by ID.
+    """
+    if request.method != 'GET':
+        return HttpResponseNotAllowed(['GET'])
+
+    try:
+        template = Template.objects.get(id=template_id)
+    except ObjectDoesNotExist:
+        return JsonResponse({'error': 'Template not found.'}, status=404)
+
+    return JsonResponse({
+        'id': template.id,
+        'name': template.name,
+        'lexical_json': template.lexical_json,
+        'created_at': template.created_at
+    })
+
+
+@csrf_exempt
+def update_template(request, template_id):
+    """
+    PUT: Update an existing template.
+    Body: { "name": "Updated Template", "lexical_json": {...} }
+    """
+    if request.method != 'PUT':
+        return HttpResponseNotAllowed(['PUT'])
+
+    try:
+        template = Template.objects.get(id=template_id)
+    except ObjectDoesNotExist:
+        return JsonResponse({'error': 'Template not found.'}, status=404)
+
+    try:
+        data = json.loads(request.body)
+        name = data.get('name')
+        lexical_json = data.get('lexical_json')
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Invalid JSON input.'}, status=400)
+
+    if name is not None:
+        template.name = name
+    if lexical_json is not None:
+        template.lexical_json = lexical_json
+
+    template.save()
+    return JsonResponse({'id': template.id, 'name': template.name})
+
+
+@csrf_exempt
+def delete_template(request, template_id):
+    """
+    DELETE: Delete a template.
+    """
+    if request.method != 'DELETE':
+        return HttpResponseNotAllowed(['DELETE'])
+
+    try:
+        template = Template.objects.get(id=template_id)
+    except ObjectDoesNotExist:
+        return JsonResponse({'error': 'Template not found.'}, status=404)
+
+    template.delete()
+    return JsonResponse({'message': 'Template deleted successfully.'}, status=204)
+
+
+def template_fields(request, template_id):
     """
     GET: Return all placeholders and prompt keys in a given template.
     """
