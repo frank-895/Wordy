@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as TemplatesRouteImport } from './routes/templates'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as TemplatesIndexRouteImport } from './routes/templates/index'
+import { Route as EditorIndexRouteImport } from './routes/editor/index'
 import { Route as TemplatesTemplateIdRouteImport } from './routes/templates/$templateId'
 import { Route as EditorTemplateIdRouteImport } from './routes/editor/$templateId'
 
@@ -30,6 +31,11 @@ const TemplatesIndexRoute = TemplatesIndexRouteImport.update({
   path: '/',
   getParentRoute: () => TemplatesRoute,
 } as any)
+const EditorIndexRoute = EditorIndexRouteImport.update({
+  id: '/editor/',
+  path: '/editor/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const TemplatesTemplateIdRoute = TemplatesTemplateIdRouteImport.update({
   id: '/$templateId',
   path: '/$templateId',
@@ -46,12 +52,14 @@ export interface FileRoutesByFullPath {
   '/templates': typeof TemplatesRouteWithChildren
   '/editor/$templateId': typeof EditorTemplateIdRoute
   '/templates/$templateId': typeof TemplatesTemplateIdRoute
+  '/editor': typeof EditorIndexRoute
   '/templates/': typeof TemplatesIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/editor/$templateId': typeof EditorTemplateIdRoute
   '/templates/$templateId': typeof TemplatesTemplateIdRoute
+  '/editor': typeof EditorIndexRoute
   '/templates': typeof TemplatesIndexRoute
 }
 export interface FileRoutesById {
@@ -60,6 +68,7 @@ export interface FileRoutesById {
   '/templates': typeof TemplatesRouteWithChildren
   '/editor/$templateId': typeof EditorTemplateIdRoute
   '/templates/$templateId': typeof TemplatesTemplateIdRoute
+  '/editor/': typeof EditorIndexRoute
   '/templates/': typeof TemplatesIndexRoute
 }
 export interface FileRouteTypes {
@@ -69,15 +78,22 @@ export interface FileRouteTypes {
     | '/templates'
     | '/editor/$templateId'
     | '/templates/$templateId'
+    | '/editor'
     | '/templates/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/editor/$templateId' | '/templates/$templateId' | '/templates'
+  to:
+    | '/'
+    | '/editor/$templateId'
+    | '/templates/$templateId'
+    | '/editor'
+    | '/templates'
   id:
     | '__root__'
     | '/'
     | '/templates'
     | '/editor/$templateId'
     | '/templates/$templateId'
+    | '/editor/'
     | '/templates/'
   fileRoutesById: FileRoutesById
 }
@@ -85,6 +101,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   TemplatesRoute: typeof TemplatesRouteWithChildren
   EditorTemplateIdRoute: typeof EditorTemplateIdRoute
+  EditorIndexRoute: typeof EditorIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -109,6 +126,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/templates/'
       preLoaderRoute: typeof TemplatesIndexRouteImport
       parentRoute: typeof TemplatesRoute
+    }
+    '/editor/': {
+      id: '/editor/'
+      path: '/editor'
+      fullPath: '/editor'
+      preLoaderRoute: typeof EditorIndexRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/templates/$templateId': {
       id: '/templates/$templateId'
@@ -145,6 +169,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   TemplatesRoute: TemplatesRouteWithChildren,
   EditorTemplateIdRoute: EditorTemplateIdRoute,
+  EditorIndexRoute: EditorIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
