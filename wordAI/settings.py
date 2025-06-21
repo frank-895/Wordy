@@ -43,10 +43,6 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     
     # user installed
-    'django_extensions',
-    'corsheaders',
-    'prompts',
-    'documents',
     'rest_framework',
     'django_vite',
 ]
