@@ -806,6 +806,10 @@ function VariableInsertionPlugin({
         const textBefore = originalText.slice(0, startOffset);
         const textAfter = originalText.slice(endOffset);
         
+        // Preserve formatting from the original node
+        const originalFormat = node.getFormat();
+        const originalStyle = node.getStyle();
+        
         // Update the original node with text before the trigger
         node.setTextContent(textBefore);
         
@@ -815,6 +819,13 @@ function VariableInsertionPlugin({
         // Add text after the variable (if any) and a space for cursor positioning
         if (textAfter.length > 0) {
           const afterTextNode = $createTextNode(textAfter);
+          // Apply original formatting to the after text
+          if (originalFormat) {
+            afterTextNode.setFormat(originalFormat);
+          }
+          if (originalStyle) {
+            afterTextNode.setStyle(originalStyle);
+          }
           variableNode.insertAfter(afterTextNode);
           // Position cursor at the start of the after text
           const newSelection = $createRangeSelection();
@@ -824,6 +835,13 @@ function VariableInsertionPlugin({
         } else {
           // Add a space after the variable for better cursor positioning
           const spaceNode = $createTextNode(' ');
+          // Apply original formatting to the space (so continued typing has same format)
+          if (originalFormat) {
+            spaceNode.setFormat(originalFormat);
+          }
+          if (originalStyle) {
+            spaceNode.setStyle(originalStyle);
+          }
           variableNode.insertAfter(spaceNode);
           // Position cursor after the space
           const newSelection = $createRangeSelection();
@@ -840,44 +858,45 @@ function VariableInsertionPlugin({
   }, [editor, variableToInsert, onVariableInserted, triggerPosition]);
 
   useEffect(() => {
-    return editor.registerTextContentListener((textContent) => {
-      // Look for @ symbol to trigger variable insertion
-      const atIndex = textContent.lastIndexOf('@');
-      if (atIndex !== -1) {
-        const afterAt = textContent.slice(atIndex + 1);
-        // Trigger on @ alone OR @ followed by optional word characters (but no spaces)
-        if (afterAt === '' || (afterAt.length <= 10 && afterAt.match(/^\w*$/))) {
-          editor.update(() => {
-            const selection = $getSelection();
-            if ($isRangeSelection(selection)) {
-              const anchorNode = selection.anchor.getNode();
-              if ($isTextNode(anchorNode)) {
-                const nodeText = anchorNode.getTextContent();
-                const cursorOffset = selection.anchor.offset;
-                const textBeforeCursor = nodeText.slice(0, cursorOffset);
-                const lastAtIndex = textBeforeCursor.lastIndexOf('@');
+    const checkForVariableTrigger = () => {
+      editor.update(() => {
+        const selection = $getSelection();
+        if ($isRangeSelection(selection)) {
+          const anchorNode = selection.anchor.getNode();
+          if ($isTextNode(anchorNode)) {
+            const nodeText = anchorNode.getTextContent();
+            const cursorOffset = selection.anchor.offset;
+            const textBeforeCursor = nodeText.slice(0, cursorOffset);
+            const lastAtIndex = textBeforeCursor.lastIndexOf('@');
+            
+            // Check if we have @ followed by optional word characters
+            if (lastAtIndex !== -1) {
+              const textAfterAt = textBeforeCursor.slice(lastAtIndex + 1);
+              
+              // Trigger if @ is followed by word characters only (no spaces) and within reasonable length
+              if (textAfterAt.length <= 10 && textAfterAt.match(/^\w*$/)) {
                 
-                if (lastAtIndex !== -1) {
-                  // Calculate end offset (cursor position)
-                  const endOffset = cursorOffset;
-                  
-                  setTriggerPosition({
-                    startOffset: lastAtIndex,
-                    endOffset: endOffset,
-                    node: anchorNode
-                  });
-                  
-                  // Get cursor position for popup
-                  const rect = window.getSelection()?.getRangeAt(0).getBoundingClientRect();
-                  if (rect) {
-                    onInsertVariable({ x: rect.left, y: rect.bottom + 5 });
-                  }
+                setTriggerPosition({
+                  startOffset: lastAtIndex,
+                  endOffset: cursorOffset,
+                  node: anchorNode
+                });
+                
+                // Get cursor position for popup
+                const rect = window.getSelection()?.getRangeAt(0).getBoundingClientRect();
+                if (rect) {
+                  onInsertVariable({ x: rect.left, y: rect.bottom + 5 });
                 }
               }
             }
-          });
+          }
         }
-      }
+      });
+    };
+
+    return editor.registerTextContentListener(() => {
+      // Use a small delay to ensure the DOM has updated
+      setTimeout(checkForVariableTrigger, 0);
     });
   }, [editor, onInsertVariable]);
 
