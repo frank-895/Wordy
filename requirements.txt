@@ -32,6 +32,7 @@ packaging==24.2
 pydantic==2.11.7
 pydantic_core==2.33.2
 PyMuPDF==1.26.1
+python-docx==1.2.0
 python-dotenv==1.0.0
 PyYAML==6.0.2
 regex==2024.11.6
