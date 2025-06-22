@@ -1,170 +1,140 @@
-# WordAI
+## 🎯 What is Wordy?
 
-A Django web application with a React frontend for AI-powered text generation
-using OpenAI's GPT models.
+An intelligent document generation platform for creating professional documents.
+Upload reference materials, design templates with smart placeholders, and
+generate contextually relevant content.
 
-## Architecture
+Perfect for proposals, reports, contracts, marketing materials, and any document
+requiring consistent formatting with dynamic content.
 
-- **Backend**: Django 5.2.3 with Django REST Framework
-- **Frontend**: React + TypeScript + TailwindCSS + Vite
-- **Integration**: django-vite for seamless frontend/backend integration
-- **Package Manager**: pnpm for frontend dependencies
+## 🚀 How It Works
 
-## Setup
+### 1. Upload Context Documents
 
-### Prerequisites
+Add reference materials relevant to your templates.
 
-- Python 3.9+
-- Node.js 18+
-- pnpm (install with `npm install -g pnpm`)
+### 2. Design Templates
 
-### Backend Setup
+Create document structure with context variables and AI prompts.
 
-1. Clone the repository and navigate to the project:
+### 3. Generate Documents
+
+Provide your details and generate polished documents with AI-generated content.
+
+<img width="904" alt="Screenshot 2025-06-22 at 11 44 36" src="https://github.com/user-attachments/assets/84afe9a4-7860-4d14-a2e1-4d85378bacdb" />
+
+## ✨ Key Features
+
+### 📝 Smart Template Editor
+
+Advanced rich text editor for creating document templates. Design once, generate
+unlimited variations.
+
+<img width="941" alt="Screenshot 2025-06-22 at 11 46 46" src="https://github.com/user-attachments/assets/45aa8960-bd7e-45b8-bf1a-48b97a66c82e" />
+
+### 🧠 AI-Powered Content Generation
+
+- **Context Variables** (`{{company_name}}`): Fill with your data
+- **AI Prompts** (`[[write introduction]]`): AI generates content using your
+  uploaded documents
+
+<img width="772" alt="Screenshot 2025-06-22 at 11 47 53" src="https://github.com/user-attachments/assets/04ec0c51-2d93-4fd5-a46f-f3b2dbf75449" />
+
+### 📚 Document Processing
+
+Upload PDFs, Word docs, or text files. Wordy processes and indexes them for AI
+content generation.
+
+<img width="768" alt="Screenshot 2025-06-22 at 11 48 31" src="https://github.com/user-attachments/assets/fcd9fe9b-76fd-4b8b-b902-f374a140ed02" />
+
+### 🎨 Document Output
+
+Generate professional documents ready for sharing. Export to PDF with full
+formatting.
+
+![image](https://github.com/user-attachments/assets/f3cc5e12-4c46-495c-a3f1-e24c65f9b01a)
+
+## 💼 Use Cases
+
+- **Business Proposals**: Customized proposals with relevant case studies
+- **Research Reports**: Reports with AI analysis based on your documents
+- **Marketing Materials**: Content using brand guidelines and campaigns
+- **Legal Documents**: Contracts with consistent language
+- **Educational Content**: Lesson plans using curriculum resources
+
+## 🌟 Benefits
+
+- **Save Time**: Automate repetitive document creation
+- **Stay Consistent**: Maintain formatting and voice across documents
+- **Use Existing Knowledge**: Leverage your document library
+- **Professional Results**: Generate polished documents
+- **Easy to Use**: Intuitive interface
+
+![image](https://github.com/user-attachments/assets/c04ace55-5b95-4f6c-a7fa-f023828e2bc7)
+
+---
+
+## 🛠️ Technical Information
+
+### Technology Stack
+
+**Frontend**
+
+- React 19 with TypeScript
+- TanStack Router
+- Lexical editor
+- Tailwind CSS
+
+**Backend**
+
+- Django REST Framework
+- OpenAI API
+- PostgreSQL/SQLite
+- Vector embeddings
+
+### Quick Setup
+
+1. **Clone repository**
 
 ```bash
 git clone <repository-url>
-cd wordAI
+cd wordy
 ```
 
-2. Create a virtual environment and activate it:
-
-```bash
-python -m venv .venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-```
-
-3. Install Python dependencies:
+2. **Backend setup**
 
 ```bash
 pip install -r requirements.txt
-```
-
-4. Create a `.env` file in the root directory and add your OpenAI API key:
-
-```bash
-echo "OPENAI_API_KEY=your_openai_api_key_here" > .env
-```
-
-5. Run Django migrations:
-
-```bash
-cd wordAI
 python manage.py migrate
-```
-
-### Frontend Setup
-
-1. Navigate to the frontend directory:
-
-```bash
-cd frontend
-```
-
-2. Install dependencies:
-
-```bash
-pnpm install
-```
-
-3. Build the frontend:
-
-```bash
-pnpm build
-```
-
-## Development
-
-### Running the Development Servers
-
-For development, you'll need to run both the Django server and the Vite dev
-server:
-
-1. **Start the Django server** (in one terminal):
-
-```bash
-cd wordAI
 python manage.py runserver
 ```
 
-2. **Start the Vite dev server** (in another terminal):
+3. **Frontend setup**
 
 ```bash
 cd frontend
+pnpm install
 pnpm dev
 ```
 
-The application will be available at:
+4. **Environment**
 
-- Django server: `http://localhost:8000`
-- Vite dev server: `http://localhost:5173` (with HMR)
-
-### Production
-
-For production, build the frontend and Django will serve the static files:
-
-```bash
-cd frontend
-pnpm build
-cd ../wordAI
-python manage.py collectstatic
-python manage.py runserver
+```env
+OPENAI_API_KEY=your_api_key_here
 ```
 
-## Project Structure
+### API Endpoints
 
-```
-wordAI/
-├── wordAI/                 # Django project
-│   ├── wordAI/            # Django settings
-│   ├── prompts/           # API app for AI prompts
-│   ├── templates/         # Django templates
-│   └── manage.py
-├── frontend/              # React frontend
-│   ├── src/
-│   │   ├── App.tsx
-│   │   ├── main.tsx
-│   │   └── index.css
-│   ├── vite.config.ts
-│   └── package.json
-├── requirements.txt       # Python dependencies
-└── .env                  # Environment variables
-```
+- `GET /api/templates/` - List templates
+- `POST /api/templates/` - Create template
+- `POST /api/templates/{id}/generate/` - Generate document
+- `POST /api/documents/upload/` - Upload document
 
-## API Endpoints
+### Architecture
 
-- `GET /` - Serves the React frontend
-- `POST /prompts/simple/` - Process AI prompts
-- `POST /prompts/generate/` - Alternative endpoint for prompts
-- `GET /admin/` - Django admin interface
+- **Template Engine**: Processes templates and variables
+- **RAG Pipeline**: Document processing and context retrieval
+- **AI Integration**: OpenAI API for content generation
+- **Frontend**: React-based interface
 
-## Technologies Used
-
-### Backend
-
-- Django 5.2.3
-- Django REST Framework
-- OpenAI Python SDK
-- python-dotenv
-
-### Frontend
-
-- React 19.1.0
-- TypeScript 5.8.3
-- TailwindCSS 4.1.10
-- Vite 6.3.5
-- pnpm
-
-### Integration
-
-- django-vite 3.1.0
-
-## Features
-
-- Modern React frontend with TypeScript
-- TailwindCSS for styling
-- Hot Module Replacement (HMR) in development
-- Production-ready build optimization
-- Django REST API integration
-- CSRF protection for API calls
-- Responsive design
+**Wordy** - Intelligent document creation powered by AI.
