@@ -1631,7 +1631,7 @@ export function LexicalEditor({ templateId }: { templateId?: string }) {
   const [variableToInsert, setVariableToInsert] = useState<VariableDefinition | null>(null);
 
   const initialConfig = {
-    namespace: 'WordAIEditor',
+    namespace: 'WordyEditor',
     theme,
     nodes: [HeadingNode, QuoteNode, ListNode, ListItemNode, VariableNode],
     onError: (error: Error) => {
@@ -1892,16 +1892,6 @@ export function LexicalEditor({ templateId }: { templateId?: string }) {
           </div>
         )}
       </div>
-
-      {/* Debug JSON Output */}
-      {jsonOutput && (
-        <div className="mt-6 bg-gray-100 p-4 rounded-lg">
-          <h3 className="font-bold mb-2">Debug JSON Output:</h3>
-          <pre className="text-xs overflow-auto bg-white p-3 rounded border">
-            {JSON.stringify(jsonOutput, null, 2)}
-          </pre>
-        </div>
-      )}
     </div>
   );
 } 
