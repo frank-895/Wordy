@@ -21,7 +21,7 @@ Create document structure with context variables and AI prompts.
 
 Provide your details and generate polished documents with AI-generated content.
 
-_[Screenshot placeholder: 3-step workflow]_
+<img width="904" alt="Screenshot 2025-06-22 at 11 44 36" src="https://github.com/user-attachments/assets/84afe9a4-7860-4d14-a2e1-4d85378bacdb" />
 
 ## ✨ Key Features
 
@@ -30,7 +30,7 @@ _[Screenshot placeholder: 3-step workflow]_
 Advanced rich text editor for creating document templates. Design once, generate
 unlimited variations.
 
-_[Screenshot placeholder: Template editor interface]_
+<img width="941" alt="Screenshot 2025-06-22 at 11 46 46" src="https://github.com/user-attachments/assets/45aa8960-bd7e-45b8-bf1a-48b97a66c82e" />
 
 ### 🧠 AI-Powered Content Generation
 
@@ -38,21 +38,21 @@ _[Screenshot placeholder: Template editor interface]_
 - **AI Prompts** (`[[write introduction]]`): AI generates content using your
   uploaded documents
 
-_[Screenshot placeholder: Template showing variable types]_
+<img width="772" alt="Screenshot 2025-06-22 at 11 47 53" src="https://github.com/user-attachments/assets/04ec0c51-2d93-4fd5-a46f-f3b2dbf75449" />
 
 ### 📚 Document Processing
 
 Upload PDFs, Word docs, or text files. Wordy processes and indexes them for AI
 content generation.
 
-_[Screenshot placeholder: Document upload interface]_
+<img width="768" alt="Screenshot 2025-06-22 at 11 48 31" src="https://github.com/user-attachments/assets/fcd9fe9b-76fd-4b8b-b902-f374a140ed02" />
 
 ### 🎨 Document Output
 
 Generate professional documents ready for sharing. Export to PDF with full
 formatting.
 
-_[Screenshot placeholder: Template → generated document]_
+![image](https://github.com/user-attachments/assets/f3cc5e12-4c46-495c-a3f1-e24c65f9b01a)
 
 ## 💼 Use Cases
 
@@ -70,7 +70,7 @@ _[Screenshot placeholder: Template → generated document]_
 - **Professional Results**: Generate polished documents
 - **Easy to Use**: Intuitive interface
 
-_[Screenshot placeholder: Dashboard with templates and documents]_
+![image](https://github.com/user-attachments/assets/c04ace55-5b95-4f6c-a7fa-f023828e2bc7)
 
 ---
 
