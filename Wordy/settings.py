@@ -84,7 +84,7 @@ WSGI_APPLICATION = 'Wordy.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
-# Use PostgreSQL if DATABASE_URL is set (Docker environment)
+# Use PostgreSQL if DATABASE_URL is set
 DATABASE_URL = os.getenv('DATABASE_URL')
 if DATABASE_URL:
     DATABASES = {
