@@ -306,6 +306,109 @@ const theme = {
   },
 };
 
+// Variable Selection Popup Component
+function VariableSelectionPopup({ 
+  isOpen, 
+  onClose, 
+  onSelectVariable,
+  onCreateNew,
+  variables, 
+  position 
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  onSelectVariable: (variable: VariableDefinition) => void;
+  onCreateNew: (position: { x: number; y: number }) => void;
+  variables: VariableDefinition[];
+  position: { x: number; y: number };
+}) {
+  const [searchTerm, setSearchTerm] = useState('');
+
+  const filteredVariables = variables.filter(variable =>
+    variable.name.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  useEffect(() => {
+    if (isOpen) {
+      setSearchTerm('');
+    }
+  }, [isOpen]);
+
+  if (!isOpen) return null;
+
+  return (
+    <div 
+      className="fixed bg-white border border-gray-300 rounded-lg shadow-lg z-50 w-80 max-h-80 overflow-hidden"
+      style={{ 
+        left: Math.min(position.x, window.innerWidth - 320), 
+        top: Math.min(position.y, window.innerHeight - 320) 
+      }}
+    >
+      <div className="p-3 border-b border-gray-200">
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="font-semibold text-sm">Insert Variable</h3>
+          <button
+            type="button"
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+        
+        <input
+          type="text"
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          placeholder="Search variables..."
+          className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+        />
+      </div>
+
+      <div className="max-h-48 overflow-y-auto">
+        {filteredVariables.length > 0 ? (
+          <div className="p-1">
+            {filteredVariables.map((variable) => (
+              <button
+                key={variable.id}
+                type="button"
+                onClick={() => onSelectVariable(variable)}
+                className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded flex items-center gap-2"
+              >
+                <div className={`w-2 h-2 rounded-full ${
+                  variable.type === 'prompt' ? 'bg-purple-500' : 'bg-blue-500'
+                }`} />
+                <div className="flex-1">
+                  <div className="font-medium">{variable.name}</div>
+                  <div className="text-xs text-gray-500">
+                    {variable.type === 'prompt' ? 'AI Prompt' : 'Variable'}
+                    {variable.defaultValue && ` • ${variable.defaultValue}`}
+                  </div>
+                </div>
+              </button>
+            ))}
+          </div>
+        ) : (
+          <div className="p-4 text-center text-gray-500 text-sm">
+            {searchTerm ? 'No variables found' : 'No variables created yet'}
+          </div>
+        )}
+      </div>
+
+      <div className="p-2 border-t border-gray-200">
+        <button
+          type="button"
+          onClick={() => onCreateNew(position)}
+          className="w-full px-3 py-2 text-sm bg-blue-500 text-white rounded hover:bg-blue-600 flex items-center justify-center gap-2"
+        >
+          <Edit3 className="w-3 h-3" />
+          Create New Variable
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // Variable Popup Component
 function VariablePopup({ 
   isOpen, 
@@ -687,73 +790,50 @@ function VariableInsertionPlugin({
   useEffect(() => {
     if (variableToInsert && triggerPosition) {
       editor.update(() => {
-        const selection = $getSelection();
-        if ($isRangeSelection(selection)) {
-          // Replace the @ trigger text with the variable
-          const { startOffset, endOffset, node } = triggerPosition;
-          
-          // Create the variable node
-          const prefix = variableToInsert.type === 'prompt' ? '[[' : '{{';
-          const suffix = variableToInsert.type === 'prompt' ? ']]' : '}}';
-          const variableNode = $createVariableNode(
-            variableToInsert.id,
-            variableToInsert.type,
-            `${prefix}${variableToInsert.name}${suffix}`
-          );
+        const { startOffset, endOffset, node } = triggerPosition;
+        
+        // Create the variable node
+        const prefix = variableToInsert.type === 'prompt' ? '[[' : '{{';
+        const suffix = variableToInsert.type === 'prompt' ? ']]' : '}}';
+        const variableNode = $createVariableNode(
+          variableToInsert.id,
+          variableToInsert.type,
+          `${prefix}${variableToInsert.name}${suffix}`
+        );
 
-          // Remove the @ trigger text and insert the variable
-          const textBefore = node.getTextContent().slice(0, startOffset);
-          const textAfter = node.getTextContent().slice(endOffset);
-          
-          // Split the text node and insert the variable in between
-          let newSelection: RangeSelection | null = null;
-          if (textBefore.length > 0) {
-            node.setTextContent(textBefore);
-            if (textAfter.length > 0) {
-              const afterTextNode = $createTextNode(textAfter);
-              node.insertAfter(afterTextNode);
-              node.insertAfter(variableNode);
-              // Position cursor at the start of the text after the variable
-              newSelection = $createRangeSelection();
-              newSelection.anchor.set(afterTextNode.getKey(), 0, 'text');
-              newSelection.focus.set(afterTextNode.getKey(), 0, 'text');
-            } else {
-              // Add a space after the variable and position cursor there
-              const spaceNode = $createTextNode(' ');
-              node.insertAfter(spaceNode);
-              node.insertAfter(variableNode);
-              newSelection = $createRangeSelection();
-              newSelection.anchor.set(spaceNode.getKey(), 0, 'text');
-              newSelection.focus.set(spaceNode.getKey(), 0, 'text');
-            }
-          } else {
-            if (textAfter.length > 0) {
-              const afterTextNode = $createTextNode(textAfter);
-              node.replace(variableNode);
-              variableNode.insertAfter(afterTextNode);
-              // Position cursor at the start of the text after the variable
-              newSelection = $createRangeSelection();
-              newSelection.anchor.set(afterTextNode.getKey(), 0, 'text');
-              newSelection.focus.set(afterTextNode.getKey(), 0, 'text');
-                          } else {
-                // Add a space after the variable and position cursor there
-                const spaceNode = $createTextNode(' ');
-                node.replace(variableNode);
-                variableNode.insertAfter(spaceNode);
-                newSelection = $createRangeSelection();
-                newSelection.anchor.set(spaceNode.getKey(), 0, 'text');
-                newSelection.focus.set(spaceNode.getKey(), 0, 'text');
-              }
-          }
-          
-          // Set the new selection
-          if (newSelection) {
-            $setSelection(newSelection);
-          }
-          
-          // Clear the trigger position
-          setTriggerPosition(null);
+        // Get the text content and split it
+        const originalText = node.getTextContent();
+        const textBefore = originalText.slice(0, startOffset);
+        const textAfter = originalText.slice(endOffset);
+        
+        // Update the original node with text before the trigger
+        node.setTextContent(textBefore);
+        
+        // Insert the variable node after the current node
+        node.insertAfter(variableNode);
+        
+        // Add text after the variable (if any) and a space for cursor positioning
+        if (textAfter.length > 0) {
+          const afterTextNode = $createTextNode(textAfter);
+          variableNode.insertAfter(afterTextNode);
+          // Position cursor at the start of the after text
+          const newSelection = $createRangeSelection();
+          newSelection.anchor.set(afterTextNode.getKey(), 0, 'text');
+          newSelection.focus.set(afterTextNode.getKey(), 0, 'text');
+          $setSelection(newSelection);
+        } else {
+          // Add a space after the variable for better cursor positioning
+          const spaceNode = $createTextNode(' ');
+          variableNode.insertAfter(spaceNode);
+          // Position cursor after the space
+          const newSelection = $createRangeSelection();
+          newSelection.anchor.set(spaceNode.getKey(), 1, 'text');
+          newSelection.focus.set(spaceNode.getKey(), 1, 'text');
+          $setSelection(newSelection);
         }
+        
+        // Clear the trigger position
+        setTriggerPosition(null);
       });
       onVariableInserted();
     }
@@ -765,18 +845,22 @@ function VariableInsertionPlugin({
       const atIndex = textContent.lastIndexOf('@');
       if (atIndex !== -1) {
         const afterAt = textContent.slice(atIndex + 1);
-        // Trigger on @ alone OR @ followed by optional word characters
-        if (afterAt === '' || afterAt.match(/^\w*$/)) {
+        // Trigger on @ alone OR @ followed by optional word characters (but no spaces)
+        if (afterAt === '' || (afterAt.length <= 10 && afterAt.match(/^\w*$/))) {
           editor.update(() => {
             const selection = $getSelection();
             if ($isRangeSelection(selection)) {
               const anchorNode = selection.anchor.getNode();
               if ($isTextNode(anchorNode)) {
-                const textBefore = anchorNode.getTextContent().slice(0, selection.anchor.offset);
-                const lastAtIndex = textBefore.lastIndexOf('@');
+                const nodeText = anchorNode.getTextContent();
+                const cursorOffset = selection.anchor.offset;
+                const textBeforeCursor = nodeText.slice(0, cursorOffset);
+                const lastAtIndex = textBeforeCursor.lastIndexOf('@');
+                
                 if (lastAtIndex !== -1) {
-                  // Store the position of the @ trigger for later replacement
-                  const endOffset = lastAtIndex + 1 + afterAt.length;
+                  // Calculate end offset (cursor position)
+                  const endOffset = cursorOffset;
+                  
                   setTriggerPosition({
                     startOffset: lastAtIndex,
                     endOffset: endOffset,
@@ -1348,15 +1432,19 @@ function convertEditorStateToCustomFormat(editorState: EditorState, variables: V
         };
         
         // Add format information if present
-        const format = (child as TextNode).getFormat();
-        if (format) {
-          textNode.format = format;
+        if ('getFormat' in child && typeof child.getFormat === 'function') {
+          const format = child.getFormat();
+          if (format) {
+            textNode.format = format;
+          }
         }
         
         // Add style information if present
-        const style = (child as TextNode).getStyle();
-        if (style) {
-          textNode.style = style;
+        if ('getStyle' in child && typeof child.getStyle === 'function') {
+          const style = child.getStyle();
+          if (style) {
+            textNode.style = style;
+          }
         }
         
         textNodes.push(textNode);
@@ -1625,6 +1713,7 @@ export function LexicalEditor({ templateId }: { templateId?: string }) {
   // New variable management state
   const [variables, setVariables] = useState<VariableDefinition[]>([]);
   const [showVariablePopup, setShowVariablePopup] = useState(false);
+  const [showVariableSelectionPopup, setShowVariableSelectionPopup] = useState(false);
   const [popupPosition, setPopupPosition] = useState({ x: 0, y: 0 });
   const [editingVariable, setEditingVariable] = useState<VariableDefinition | undefined>();
 
@@ -1684,7 +1773,18 @@ export function LexicalEditor({ templateId }: { templateId?: string }) {
 
   const handleInsertVariable = (position: { x: number; y: number }) => {
     setPopupPosition(position);
+    setShowVariableSelectionPopup(true);
+  };
+
+  const handleSelectExistingVariable = (variable: VariableDefinition) => {
+    setVariableToInsert(variable);
+    setShowVariableSelectionPopup(false);
+  };
+
+  const handleCreateNewVariable = (position: { x: number; y: number }) => {
+    setPopupPosition(position);
     setEditingVariable(undefined);
+    setShowVariableSelectionPopup(false);
     setShowVariablePopup(true);
   };
 
@@ -1693,9 +1793,8 @@ export function LexicalEditor({ templateId }: { templateId?: string }) {
       const existing = prev.find(v => v.id === variable.id);
       if (existing) {
         return prev.map(v => v.id === variable.id ? variable : v);
-      } else {
-        return [...prev, variable];
       }
+      return [...prev, variable];
     });
 
     // Insert variable into editor if it's a new variable
@@ -1770,7 +1869,7 @@ export function LexicalEditor({ templateId }: { templateId?: string }) {
     return (
       <div className="w-full max-w-4xl mx-auto">
         <div className="bg-white border border-gray-300 rounded-lg p-8 text-center">
-          <div className="inline-block w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+          <div className="inline-block w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
           <p className="mt-4 text-gray-600">Loading template...</p>
         </div>
       </div>
@@ -1838,6 +1937,16 @@ export function LexicalEditor({ templateId }: { templateId?: string }) {
           </div>
         </LexicalComposer>
       </div>
+
+      {/* Variable Selection Popup */}
+      <VariableSelectionPopup
+        isOpen={showVariableSelectionPopup}
+        onClose={() => setShowVariableSelectionPopup(false)}
+        onSelectVariable={handleSelectExistingVariable}
+        onCreateNew={handleCreateNewVariable}
+        variables={variables}
+        position={popupPosition}
+      />
 
       {/* Variable Popup */}
       <VariablePopup
